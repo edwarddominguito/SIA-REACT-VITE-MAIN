@@ -1,0 +1,475 @@
+{
+  "users": [
+    {
+      "id": "u1",
+      "username": "syncuser",
+      "password": "newpass123",
+      "role": "customer",
+      "fullName": "Sync User",
+      "email": "sync@email.com",
+      "phone": "09111111111",
+      "updatedAt": "2026-03-07T02:06:23.215Z"
+    },
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "admin123",
+      "role": "admin",
+      "fullName": "System Admin",
+      "phone": "09123456789",
+      "email": "admin@email.com",
+      "photoUrl": ""
+    },
+    {
+      "id": 2,
+      "username": "agent",
+      "password": "agent123",
+      "role": "agent",
+      "fullName": "Wel John Natividad",
+      "phone": "09999999999",
+      "email": "agent@email.com",
+      "photoUrl": ""
+    },
+    {
+      "id": 3,
+      "username": "customer",
+      "password": "customer123",
+      "role": "customer",
+      "fullName": "Eduardo C. Dominguito III",
+      "phone": "09630648874",
+      "email": "customer@email.com",
+      "photoUrl": ""
+    }
+  ],
+  "properties": [
+    {
+      "id": "PROP-85ECCD87",
+      "title": "Condo",
+      "location": "Davao City",
+      "price": 1000000,
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "areaSqft": 1200,
+      "description": "Nice",
+      "imageUrl": "https://images.unsplash.com/photo-1516455590571-18256e5bb9ff?auto=format&fit=crop&w=1600&q=80",
+      "status": "available",
+      "agent": "agent"
+    },
+    {
+      "id": "PROP-06874028",
+      "title": "Beachside Vacation House",
+      "location": "Samal Island, Davao del Norte",
+      "price": 9800000,
+      "bedrooms": 4,
+      "bathrooms": 3,
+      "areaSqft": 2500,
+      "description": "Relaxing beachside house with ocean view. Ideal for vacation rentals or family retreats.",
+      "imageUrl": "https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=1600&q=80",
+      "status": "available",
+      "agent": "agent"
+    },
+    {
+      "id": "PROP-978D0F81",
+      "title": "Investment Property Rental House",
+      "location": "Mintal, Davao City",
+      "price": 3900000,
+      "bedrooms": 4,
+      "bathrooms": 2,
+      "areaSqft": 1600,
+      "description": "Perfect rental investment property near universities and commercial establishments.",
+      "imageUrl": "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=1600&q=80",
+      "status": "available",
+      "agent": "agent"
+    },
+    {
+      "id": "PROP-A6CDB9CC",
+      "title": "Townhouse in Gated Community",
+      "location": "Toril, Davao City",
+      "price": 3100000,
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "areaSqft": 120,
+      "description": "Secure townhouse located in a gated subdivision with parks and playgrounds.",
+      "imageUrl": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1600&q=80",
+      "status": "available",
+      "agent": "agent"
+    },
+    {
+      "id": "PROP-B29C2B74",
+      "title": "Condo Unit Near SM Lanang",
+      "location": "Lanang, Davao City",
+      "price": 3500000,
+      "bedrooms": 1,
+      "bathrooms": 1,
+      "areaSqft": 650,
+      "description": "Fully furnished condo unit with access to swimming pool, gym, and 24/7 security.",
+      "imageUrl": "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1600&q=80",
+      "status": "available",
+      "agent": "agent"
+    },
+    {
+      "id": "PROP-CBD22FD9",
+      "title": "Luxury Villa with Garden",
+      "location": "Lanang, Davao City",
+      "price": 12500000,
+      "bedrooms": 5,
+      "bathrooms": 4,
+      "areaSqft": 3200,
+      "description": "High-end villa with landscaped garden, modern kitchen, and large living spaces. Close to international schools and malls.",
+      "imageUrl": "https://images.unsplash.com/photo-1560185007-5f0bb1866cab?auto=format&fit=crop&w=1600&q=80",
+      "status": "available",
+      "agent": "agent"
+    },
+    {
+      "id": "PROP-1C10FAAA",
+      "title": "Affordable Family Home",
+      "location": "Buhangin, Davao City",
+      "price": 2800000,
+      "bedrooms": 2,
+      "bathrooms": 1,
+      "areaSqft": 980,
+      "description": "Budget-friendly home perfect for starting families. Quiet neighborhood with easy access to public transportation.",
+      "imageUrl": "https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1600&q=80",
+      "status": "available",
+      "agent": "agent"
+    },
+    {
+      "id": "PROP-82EA625A",
+      "title": "Modern 2-Storey House in Davao",
+      "location": "Matina, Davao City",
+      "price": 4200000,
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "areaSqft": 1450,
+      "description": "Newly built modern house located near schools, malls, and hospitals. Ideal for small families.",
+      "imageUrl": "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1600&q=80",
+      "status": "available",
+      "agent": "agent"
+    }
+  ],
+  "appointments": [
+    {
+      "id": "APP-4625F73C",
+      "propertyId": "PROP-85ECCD87",
+      "propertyImage": "https://images.unsplash.com/photo-1516455590571-18256e5bb9ff?auto=format&fit=crop&w=1600&q=80",
+      "propertyTitle": "Condo",
+      "location": "Davao City",
+      "agent": "agent",
+      "customer": "customer",
+      "date": "2026-03-14",
+      "time": "12:00",
+      "status": "pending",
+      "assignedAgent": "agent",
+      "assignedByAdmin": "admin",
+      "assignedAt": "2026-03-09T07:04:29.767Z"
+    },
+    {
+      "id": "APP-31C520F2",
+      "propertyId": "PROP-06874028",
+      "propertyImage": "https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=1600&q=80",
+      "propertyTitle": "Beachside Vacation House",
+      "location": "Samal Island, Davao del Norte",
+      "agent": "agent",
+      "customer": "customer",
+      "date": "2026-03-26",
+      "time": "08:00",
+      "status": "done",
+      "assignedAgent": "agent",
+      "assignedByAdmin": "admin",
+      "assignedAt": "2026-03-07T11:58:18.595Z",
+      "rescheduledAt": "2026-03-07T11:59:56.728Z",
+      "rescheduledBy": "agent"
+    },
+    {
+      "id": "APP-3E7651A3",
+      "propertyId": "PROP-978D0F81",
+      "propertyImage": "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=1600&q=80",
+      "propertyTitle": "Investment Property Rental House",
+      "location": "Mintal, Davao City",
+      "agent": "agent",
+      "customer": "customer",
+      "date": "2026-03-13",
+      "time": "10:40",
+      "status": "done",
+      "assignedAgent": "agent",
+      "assignedByAdmin": "admin",
+      "assignedAt": "2026-03-07T02:47:13.610Z"
+    }
+  ],
+  "officeMeets": [
+    {
+      "id": "MEET-DA850640",
+      "title": "Customer Office Meet Request",
+      "fullName": "Eduardo C. Dominguito III",
+      "email": "customer@email.com",
+      "date": "2026-03-09",
+      "time": "10:50",
+      "reason": "Schedule property visit plan",
+      "mode": "office",
+      "customer": "customer",
+      "requestedBy": "customer",
+      "requestedRole": "customer",
+      "status": "done",
+      "assignedAgent": "agent",
+      "agent": "agent"
+    }
+  ],
+  "reviews": [],
+  "notifications": [
+    {
+      "id": "NTF-A5572AC3",
+      "to": "customer",
+      "type": "appointment",
+      "title": "Agent Assigned",
+      "message": "Admin assigned Agent @agent to your appointment for Condo.",
+      "appointmentId": "APP-4625F73C",
+      "meta": {
+        "appointmentId": "APP-4625F73C",
+        "assignedAgent": "agent",
+        "propertyId": "PROP-85ECCD87",
+        "propertyTitle": "Condo"
+      },
+      "createdAt": "2026-03-09T07:04:29.767Z"
+    },
+    {
+      "id": "NTF-F834B887",
+      "to": "agent",
+      "type": "appointment",
+      "title": "New Appointment Assignment",
+      "message": "Admin assigned Condo on 2026-03-14 12:00 PM to you.",
+      "appointmentId": "APP-4625F73C",
+      "meta": {
+        "appointmentId": "APP-4625F73C",
+        "propertyId": "PROP-85ECCD87",
+        "propertyTitle": "Condo",
+        "customer": "customer",
+        "assignedBy": "admin"
+      },
+      "createdAt": "2026-03-09T07:04:29.767Z"
+    },
+    {
+      "id": "NTF-B2488343",
+      "to": "admin",
+      "type": "appointment",
+      "title": "New Appointment Request",
+      "message": "Customer @customer requested Condo on 2026-03-14 12:00 PM.",
+      "appointmentId": "",
+      "meta": {
+        "customer": "customer",
+        "agent": "agent",
+        "propertyId": "PROP-85ECCD87",
+        "propertyTitle": "Condo",
+        "date": "2026-03-14",
+        "time": "12:00"
+      },
+      "createdAt": "2026-03-09T07:04:11.217Z"
+    },
+    {
+      "id": "NTF-C3DC0EAA",
+      "to": "customer",
+      "type": "appointment",
+      "title": "Appointment Update",
+      "message": "Agent @agent rescheduled Beachside Vacation House from 2026-03-16 8:00 AM to 2026-03-26 8:00 AM.",
+      "appointmentId": "APP-31C520F2",
+      "meta": {
+        "status": "rescheduled",
+        "propertyId": "PROP-06874028",
+        "propertyTitle": "Beachside Vacation House",
+        "agent": "agent",
+        "date": "2026-03-26",
+        "time": "08:00"
+      },
+      "createdAt": "2026-03-07T11:59:56.728Z",
+      "readAt": "2026-03-07T12:02:56.964Z"
+    },
+    {
+      "id": "NTF-300B5500",
+      "to": "customer",
+      "type": "appointment",
+      "title": "Agent Assigned",
+      "message": "Admin assigned Agent @agent to your appointment for Beachside Vacation House.",
+      "appointmentId": "APP-31C520F2",
+      "meta": {
+        "appointmentId": "APP-31C520F2",
+        "assignedAgent": "agent",
+        "propertyId": "PROP-06874028",
+        "propertyTitle": "Beachside Vacation House"
+      },
+      "createdAt": "2026-03-07T11:58:18.596Z",
+      "readAt": "2026-03-07T11:59:34.889Z"
+    },
+    {
+      "id": "NTF-17B4FD9E",
+      "to": "agent",
+      "type": "appointment",
+      "title": "New Appointment Assignment",
+      "message": "Admin assigned Beachside Vacation House on 2026-03-16 8:00 AM to you.",
+      "appointmentId": "APP-31C520F2",
+      "meta": {
+        "appointmentId": "APP-31C520F2",
+        "propertyId": "PROP-06874028",
+        "propertyTitle": "Beachside Vacation House",
+        "customer": "customer",
+        "assignedBy": "admin"
+      },
+      "createdAt": "2026-03-07T11:58:18.596Z",
+      "readAt": "2026-03-07T11:58:46.836Z"
+    },
+    {
+      "id": "NTF-CE66B1CA",
+      "to": "admin",
+      "type": "appointment",
+      "title": "New Appointment Request",
+      "message": "Customer @customer requested Beachside Vacation House on 2026-03-16 8:00 AM.",
+      "appointmentId": "",
+      "meta": {
+        "customer": "customer",
+        "agent": "agent",
+        "propertyId": "PROP-06874028",
+        "propertyTitle": "Beachside Vacation House",
+        "date": "2026-03-16",
+        "time": "08:00"
+      },
+      "createdAt": "2026-03-07T11:57:18.002Z",
+      "readAt": "2026-03-07T12:06:17.282Z"
+    },
+    {
+      "id": "NTF-7068EED6",
+      "to": "customer",
+      "type": "office-meet",
+      "title": "Office Meet Update",
+      "message": "Agent @agent marked your in-office office meet as completed (2026-03-09 10:50 AM).",
+      "appointmentId": "",
+      "meta": {
+        "meetId": "MEET-DA850640",
+        "status": "done",
+        "date": "2026-03-09",
+        "time": "10:50",
+        "mode": "office",
+        "agent": "agent"
+      },
+      "createdAt": "2026-03-07T02:52:24.038Z",
+      "readAt": "2026-03-07T02:52:35.608Z"
+    },
+    {
+      "id": "NTF-4BD4DF56",
+      "to": "customer",
+      "type": "office-meet",
+      "title": "Office Meet Update",
+      "message": "Agent @agent marked your in-office office meet as approved (2026-03-09 10:50 AM).",
+      "appointmentId": "",
+      "meta": {
+        "meetId": "MEET-DA850640",
+        "status": "approved",
+        "date": "2026-03-09",
+        "time": "10:50",
+        "mode": "office",
+        "agent": "agent"
+      },
+      "createdAt": "2026-03-07T02:51:36.068Z",
+      "readAt": "2026-03-07T02:51:56.072Z"
+    },
+    {
+      "id": "NTF-5737785C",
+      "to": "agent",
+      "type": "office-meet",
+      "title": "New Office Meet Request",
+      "message": "Customer @customer requested a in-office meet on 2026-03-09 10:50 AM.",
+      "appointmentId": "",
+      "meta": {
+        "customer": "customer",
+        "mode": "office",
+        "date": "2026-03-09",
+        "time": "10:50"
+      },
+      "createdAt": "2026-03-07T02:51:18.049Z",
+      "readAt": "2026-03-07T02:51:30.067Z"
+    },
+    {
+      "id": "NTF-A14BCF9B",
+      "to": "admin",
+      "type": "office-meet",
+      "title": "New Office Meet Request",
+      "message": "Customer @customer requested a in-office meet on 2026-03-09 10:50 AM.",
+      "appointmentId": "",
+      "meta": {
+        "customer": "customer",
+        "mode": "office",
+        "date": "2026-03-09",
+        "time": "10:50"
+      },
+      "createdAt": "2026-03-07T02:51:18.049Z",
+      "readAt": "2026-03-07T02:52:51.802Z"
+    },
+    {
+      "id": "NTF-AE09B47F",
+      "to": "customer",
+      "type": "appointment",
+      "title": "Appointment Update",
+      "message": "Agent @agent confirmed Investment Property Rental House on 2026-03-13 10:40 AM.",
+      "appointmentId": "APP-3E7651A3",
+      "meta": {
+        "status": "approved",
+        "propertyId": "PROP-978D0F81",
+        "propertyTitle": "Investment Property Rental House",
+        "agent": "agent",
+        "date": "2026-03-13",
+        "time": "10:40"
+      },
+      "createdAt": "2026-03-07T02:48:20.728Z",
+      "readAt": "2026-03-07T02:48:55.328Z"
+    },
+    {
+      "id": "NTF-435B2DBD",
+      "to": "customer",
+      "type": "appointment",
+      "title": "Agent Assigned",
+      "message": "Admin assigned Agent @agent to your appointment for Investment Property Rental House.",
+      "appointmentId": "APP-3E7651A3",
+      "meta": {
+        "appointmentId": "APP-3E7651A3",
+        "assignedAgent": "agent",
+        "propertyId": "PROP-978D0F81",
+        "propertyTitle": "Investment Property Rental House"
+      },
+      "createdAt": "2026-03-07T02:47:13.611Z",
+      "readAt": "2026-03-07T02:48:55.328Z"
+    },
+    {
+      "id": "NTF-1F03F812",
+      "to": "agent",
+      "type": "appointment",
+      "title": "New Appointment Assignment",
+      "message": "Admin assigned Investment Property Rental House on 2026-03-13 10:40 AM to you.",
+      "appointmentId": "APP-3E7651A3",
+      "meta": {
+        "appointmentId": "APP-3E7651A3",
+        "propertyId": "PROP-978D0F81",
+        "propertyTitle": "Investment Property Rental House",
+        "customer": "customer",
+        "assignedBy": "admin"
+      },
+      "createdAt": "2026-03-07T02:47:13.611Z",
+      "readAt": "2026-03-07T02:51:30.067Z"
+    },
+    {
+      "id": "NTF-6BDFBAE9",
+      "to": "admin",
+      "type": "appointment",
+      "title": "New Appointment Request",
+      "message": "Customer @customer requested Investment Property Rental House on 2026-03-13 10:40 AM.",
+      "appointmentId": "",
+      "meta": {
+        "customer": "customer",
+        "agent": "agent",
+        "propertyId": "PROP-978D0F81",
+        "propertyTitle": "Investment Property Rental House",
+        "date": "2026-03-13",
+        "time": "10:40"
+      },
+      "createdAt": "2026-03-07T02:46:17.816Z",
+      "readAt": "2026-03-07T02:46:53.155Z"
+    }
+  ],
+  "trips": []
+}
