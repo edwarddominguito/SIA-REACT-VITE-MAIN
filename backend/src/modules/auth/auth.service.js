@@ -17,6 +17,83 @@ export const registerAuthServiceRoutes = (api, model) => {
     makeId
   } = deps;
 
+  const SUPABASE_URL = clean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL, 500).replace(/\/+$/, "");
+  const SUPABASE_ANON_KEY = clean(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY, 2500);
+  const GOOGLE_AUTH_FALLBACK_PASSWORD = clean(process.env.GOOGLE_AUTH_FALLBACK_PASSWORD || "google_oauth_user", 120);
+
+  const toSafeUser = (userLike) => ({
+    id: userLike?.id,
+    username: userLike?.username,
+    fullName: userLike?.fullName || "",
+    email: userLike?.email || "",
+    phone: userLike?.phone || "",
+    role: userLike?.role || "customer",
+    photoUrl: userLike?.photoUrl || "",
+    accountStatus: userLike?.accountStatus || "active",
+    availabilityStatus: userLike?.availabilityStatus || "available",
+    lastActiveAt: userLike?.lastActiveAt || ""
+  });
+
+  const baseUsernameFromEmail = (emailValue) => {
+    const local = String(emailValue || "").split("@")[0] || "googleuser";
+    const normalized = clean(local, 50).toLowerCase().replace(/[^a-z0-9._-]/g, "");
+    if (normalized.length >= 3) return normalized.slice(0, 32);
+    return "googleuser";
+  };
+
+  const makeUniqueUsername = (usersLike, seed) => {
+    const taken = new Set(
+      (Array.isArray(usersLike) ? usersLike : []).map((entry) => clean(entry?.username, 50).toLowerCase()).filter(Boolean)
+    );
+    const base = clean(seed, 32).toLowerCase().replace(/[^a-z0-9._-]/g, "") || "googleuser";
+    if (!taken.has(base)) return base;
+
+    let index = 1;
+    while (index < 10000) {
+      const suffix = `_${index}`;
+      const candidate = `${base.slice(0, Math.max(3, 32 - suffix.length))}${suffix}`;
+      if (!taken.has(candidate)) return candidate;
+      index += 1;
+    }
+    return `google_${Date.now().toString(36).slice(-6)}`;
+  };
+
+  const parseJsonSafe = async (response) => {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchSupabaseUser = async (accessToken) => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      const err = new Error("Google Sign-In backend is not configured. Missing SUPABASE_URL or SUPABASE_ANON_KEY.");
+      err.statusCode = 500;
+      throw err;
+    }
+    if (typeof fetch !== "function") {
+      const err = new Error("This runtime does not support fetch, so Supabase token verification is unavailable.");
+      err.statusCode = 500;
+      throw err;
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: "GET",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    const payload = await parseJsonSafe(response);
+    if (!response.ok) {
+      const err = new Error(clean(payload?.msg || payload?.error_description || "Invalid Google session token.", 240));
+      err.statusCode = response.status === 401 || response.status === 403 ? 401 : 400;
+      throw err;
+    }
+    return payload || {};
+  };
+
 api.post("/auth/login", asyncHandler(async (req, res) => {
   const username = clean(req.body?.username, 50).replace(/\s+/g, "").toLowerCase();
   const password = clean(req.body?.password, 120);
@@ -50,20 +127,73 @@ api.post("/auth/login", asyncHandler(async (req, res) => {
   });
   const freshUser = refreshedDb.users.find((entry) => String(entry?.id || "") === String(user.id)) || user;
 
-  const safeUser = {
-    id: freshUser.id,
-    username: freshUser.username,
-    fullName: freshUser.fullName || "",
-    email: freshUser.email || "",
-    phone: freshUser.phone || "",
-    role: freshUser.role || "customer",
-    photoUrl: freshUser.photoUrl || "",
-    accountStatus: freshUser.accountStatus || "active",
-    availabilityStatus: freshUser.availabilityStatus || "available",
-    lastActiveAt: freshUser.lastActiveAt || ""
-  };
+  return res.json({ ok: true, data: toSafeUser(freshUser) });
+}));
 
-  return res.json({ ok: true, data: safeUser });
+api.post("/auth/google/session", asyncHandler(async (req, res) => {
+  const authHeader = String(req.headers.authorization || "").trim();
+  const accessToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  if (!accessToken) {
+    return res.status(401).json({ ok: false, message: "Missing Google session token." });
+  }
+
+  const profile = await fetchSupabaseUser(accessToken);
+  const providerUserId = clean(profile?.id, 120);
+  const email = clean(profile?.email, 120).toLowerCase();
+  const metadata = profile?.user_metadata && typeof profile.user_metadata === "object" ? profile.user_metadata : {};
+  const fullName = clean(metadata?.full_name || metadata?.name, 90);
+  const photoUrl = clean(metadata?.avatar_url || metadata?.picture, 1200);
+
+  if (!providerUserId || !email) {
+    return res.status(400).json({ ok: false, message: "Google account did not return a valid email profile." });
+  }
+
+  const nowIso = new Date().toISOString();
+  const db = await loadDb();
+  const existing = db.users.find((entry) => clean(entry?.email, 120).toLowerCase() === email) || null;
+  if (existing && normalizeAccountStatus(existing.accountStatus) !== "active") {
+    return res.status(403).json({ ok: false, message: "This account is inactive. Please contact support." });
+  }
+
+  const updatedDb = await updateDb((currentDb) => {
+    const users = Array.isArray(currentDb?.users) ? currentDb.users.slice() : [];
+    const existingIndex = users.findIndex((entry) => clean(entry?.email, 120).toLowerCase() === email);
+    if (existingIndex >= 0) {
+      users[existingIndex] = sanitizeUserRecord({
+        ...users[existingIndex],
+        fullName: fullName || users[existingIndex]?.fullName || baseUsernameFromEmail(email),
+        photoUrl: photoUrl || users[existingIndex]?.photoUrl || "",
+        lastActiveAt: nowIso,
+        updatedAt: nowIso
+      });
+      return { ...currentDb, users };
+    }
+
+    const username = makeUniqueUsername(users, baseUsernameFromEmail(email));
+    const created = sanitizeUserRecord({
+      id: makeId("USR"),
+      username,
+      password: `${GOOGLE_AUTH_FALLBACK_PASSWORD}_${providerUserId}`.slice(0, 120),
+      fullName: fullName || username,
+      email,
+      phone: "",
+      photoUrl,
+      role: "customer",
+      accountStatus: "active",
+      availabilityStatus: "offline",
+      lastActiveAt: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+    return { ...currentDb, users: [created, ...users] };
+  });
+
+  const signedInUser = updatedDb.users.find((entry) => clean(entry?.email, 120).toLowerCase() === email);
+  if (!signedInUser) {
+    return res.status(500).json({ ok: false, message: "Unable to finalize Google sign-in." });
+  }
+
+  return res.json({ ok: true, data: toSafeUser(signedInUser) });
 }));
 
 api.post("/auth/register", asyncHandler(async (req, res) => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "@/services/authService.js";
+import { login, loginWithGoogle } from "@/services/authService.js";
 import { getCurrentUser } from "@/services/storageService.js";
 import { cleanUsername, isStrongEnoughPassword, isValidUsername } from "@/utils/input.js";
 import "./auth.css";
@@ -29,7 +29,7 @@ const errorStyle = {
 };
 
 const socialButtonStyle = {
-  flex: 1,
+  width: "100%",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -38,12 +38,12 @@ const socialButtonStyle = {
   borderRadius: 9,
   border: "1.5px solid #e3e5ea",
   background: "#fff",
-  fontSize: 11,
-  fontWeight: 500,
+  fontSize: 12,
+  fontWeight: 600,
   color: "#3a3f4b",
-  cursor: "not-allowed",
+  cursor: "pointer",
   transition: "all 0.15s",
-  opacity: 0.72
+  opacity: 1
 };
 
 const routeForRole = (role) => {
@@ -61,6 +61,7 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [focused, setFocused] = useState(null);
   const [shake, setShake] = useState(false);
   const userRef = useRef(null);
@@ -108,6 +109,20 @@ export default function Login() {
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") handleSubmit();
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (loading || googleLoading) return;
+    setServerError("");
+    setGoogleLoading(true);
+    const result = await loginWithGoogle();
+    if (!result?.ok) {
+      setServerError(result?.message || "Unable to continue with Google.");
+      triggerShake();
+      setGoogleLoading(false);
+      return;
+    }
+    window.setTimeout(() => setGoogleLoading(false), 5000);
   };
 
   return (
@@ -215,13 +230,6 @@ export default function Login() {
               </div>
             ))}
           </div>
-        </div>
-
-        <div style={{ position: "relative", zIndex: 2, animation: "fadeIn 0.5s 0.4s ease both", display: "none" }} aria-hidden="true">
-          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.2)" }}>© 2026 RealEstate Pro. All rights reserved.</div>
-        </div>
-        <div style={{ position: "relative", zIndex: 2, animation: "fadeIn 0.5s 0.4s ease both", display: "none" }} aria-hidden="true">
-          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.2)" }}>© 2026 TES PROPERTY REAL ESTATE. All rights reserved.</div>
         </div>
         <div style={{ position: "relative", zIndex: 2, animation: "fadeIn 0.5s 0.4s ease both" }}>
           <div style={{ fontSize: 9, color: "rgba(255,255,255,0.2)" }}>{"\u00A9"} 2026 TES PROPERTY REAL ESTATE. All rights reserved.</div>
@@ -409,7 +417,7 @@ export default function Login() {
                   Signing in...
                 </>
               ) : (
-                <>Sign in <span style={{ fontSize: 15, marginTop: -1 }}>→</span></>
+                <>Sign in <span style={{ fontSize: 15, marginTop: -1 }}>-&gt;</span></>
               )}
             </button>
           </form>
@@ -421,13 +429,19 @@ export default function Login() {
           </div>
 
           <div className="login-redesign-socials" style={{ display: "flex", gap: 10 }}>
-            <button type="button" disabled title="Google login is not available yet" style={socialButtonStyle}>
+            <button
+              type="button"
+              title="Continue with Google"
+              onClick={handleGoogleSignIn}
+              disabled={loading || googleLoading}
+              style={{
+                ...socialButtonStyle,
+                cursor: loading || googleLoading ? "not-allowed" : "pointer",
+                opacity: loading || googleLoading ? 0.72 : 1
+              }}
+            >
               <svg width="15" height="15" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" /><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" /><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" /><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" /></svg>
-              Google
-            </button>
-            <button type="button" disabled title="Facebook login is not available yet" style={socialButtonStyle}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-              Facebook
+              {googleLoading ? "Redirecting to Google..." : "Google"}
             </button>
           </div>
 
@@ -446,3 +460,4 @@ export default function Login() {
     </div>
   );
 }
+

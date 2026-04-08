@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage.jsx";
 import LoginPage from "../pages/auth/LoginPage.jsx";
+import OAuthCallbackPage from "../pages/auth/OAuthCallbackPage.jsx";
 import RegisterPage from "../pages/auth/RegisterPage.jsx";
 import AdminAddUserPage from "../pages/dashboard/AdminAddUserPage.jsx";
 import AdminDashboardPage from "../pages/dashboard/AdminDashboardPage.jsx";
@@ -14,6 +15,7 @@ export const publicRoutes = Object.freeze([
   { path: "/", element: createElement(HomePage) },
   { path: "/properties/:id", element: createElement(PropertyDetailsPage) },
   { path: "/login", element: createElement(LoginPage) },
+  { path: "/auth/callback", element: createElement(OAuthCallbackPage) },
   { path: "/register", element: createElement(RegisterPage) },
   { path: "/forgot-password", element: createElement(ForgotPasswordPage) }
 ]);

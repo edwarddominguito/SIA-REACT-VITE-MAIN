@@ -5,6 +5,7 @@ This is a React+Vite conversion of your LocalStorage-based SIA TES Property UI.
 ## Folder structure
 - `frontend/` React + Vite app
 - `backend/` Express server (optional) to serve the built `frontend/dist`
+- `supabase/` Supabase setup notes and SQL migrations
 - `docs/refactor-baseline.md` route matrix and parity checklist for safe refactors
 
 ## Architecture (refactor baseline)
@@ -34,6 +35,28 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Google Sign-In setup (Supabase)
+1. Copy env templates:
+```bash
+copy frontend\\.env.example frontend\\.env
+copy backend\\.env.example backend\\.env
+```
+2. In `frontend/.env`, set:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+3. In `backend/.env`, set:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+4. In Supabase Dashboard:
+- `Authentication -> Providers -> Google`:
+  - Enable Google provider.
+  - Set your Google OAuth Client ID and Client Secret.
+- `Authentication -> URL Configuration`:
+  - Add `http://localhost:5173/auth/callback` to Redirect URLs.
+5. In Google Cloud OAuth client:
+- Authorized JavaScript origin: `http://localhost:5173`
+- Authorized redirect URI: `https://jtstkfpzrhjbqqkfmtvw.supabase.co/auth/v1/callback`
 
 ### Demo accounts
 - admin / admin123
