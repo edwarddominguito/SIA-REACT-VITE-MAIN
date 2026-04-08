@@ -1,0 +1,30 @@
+.messaging-shell {
+  height: calc(100vh - 190px);
+  min-height: 0;
+  max-height: calc(100vh - 160px);
+}
+
+.messaging-thread-panel,
+.messaging-thread-body {
+  min-height: 0;
+}
+
+.messaging-thread-body {
+  justify-content: flex-start;
+  align-content: flex-start;
+}
+
+.messaging-thread-body > * {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 991px) {
+  .messaging-shell {
+    height: calc(100vh - 140px);
+    max-height: calc(100vh - 120px);
+  }
+
+  .messaging-thread-panel {
+    min-height: 0;
+  }
+}

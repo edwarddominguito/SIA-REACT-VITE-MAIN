@@ -2,10 +2,12 @@
   "name": "sia-tes-property-backend",
   "private": true,
   "version": "1.0.0",
+  "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js"
+    "dev": "node src/server.js",
+    "start": "node src/server.js",
+    "google-calendar:token": "node scripts/google-calendar-oauth.js"
   },
   "dependencies": {
     "compression": "^1.8.1",

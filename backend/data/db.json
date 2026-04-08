@@ -173,7 +173,7 @@
       "customer": "customer",
       "date": "2026-03-26",
       "time": "08:00",
-      "status": "done",
+      "status": "completed",
       "assignedAgent": "agent",
       "assignedByAdmin": "admin",
       "assignedAt": "2026-03-07T11:58:18.595Z",
@@ -190,7 +190,7 @@
       "customer": "customer",
       "date": "2026-03-13",
       "time": "10:40",
-      "status": "done",
+      "status": "completed",
       "assignedAgent": "agent",
       "assignedByAdmin": "admin",
       "assignedAt": "2026-03-07T02:47:13.610Z"
@@ -199,7 +199,7 @@
   "officeMeets": [
     {
       "id": "MEET-DA850640",
-      "title": "Customer Office Meet Request",
+      "title": "Customer Office Meeting Request",
       "fullName": "Eduardo C. Dominguito III",
       "email": "customer@email.com",
       "date": "2026-03-09",
@@ -209,7 +209,7 @@
       "customer": "customer",
       "requestedBy": "customer",
       "requestedRole": "customer",
-      "status": "done",
+      "status": "completed",
       "assignedAgent": "agent",
       "agent": "agent"
     }
@@ -337,12 +337,12 @@
       "id": "NTF-7068EED6",
       "to": "customer",
       "type": "office-meet",
-      "title": "Office Meet Update",
-      "message": "Agent @agent marked your in-office office meet as completed (2026-03-09 10:50 AM).",
+      "title": "Office Meeting Update",
+      "message": "Agent @agent marked your in-office office meeting as completed (2026-03-09 10:50 AM).",
       "appointmentId": "",
       "meta": {
         "meetId": "MEET-DA850640",
-        "status": "done",
+        "status": "completed",
         "date": "2026-03-09",
         "time": "10:50",
         "mode": "office",
@@ -355,12 +355,12 @@
       "id": "NTF-4BD4DF56",
       "to": "customer",
       "type": "office-meet",
-      "title": "Office Meet Update",
-      "message": "Agent @agent marked your in-office office meet as approved (2026-03-09 10:50 AM).",
+      "title": "Office Meeting Update",
+      "message": "Agent @agent marked your in-office office meeting as confirmed (2026-03-09 10:50 AM).",
       "appointmentId": "",
       "meta": {
         "meetId": "MEET-DA850640",
-        "status": "approved",
+        "status": "confirmed",
         "date": "2026-03-09",
         "time": "10:50",
         "mode": "office",
@@ -373,8 +373,8 @@
       "id": "NTF-5737785C",
       "to": "agent",
       "type": "office-meet",
-      "title": "New Office Meet Request",
-      "message": "Customer @customer requested a in-office meet on 2026-03-09 10:50 AM.",
+      "title": "New Office Meeting Request",
+      "message": "Customer @customer requested an in-office office meeting on 2026-03-09 10:50 AM.",
       "appointmentId": "",
       "meta": {
         "customer": "customer",
@@ -389,8 +389,8 @@
       "id": "NTF-A14BCF9B",
       "to": "admin",
       "type": "office-meet",
-      "title": "New Office Meet Request",
-      "message": "Customer @customer requested a in-office meet on 2026-03-09 10:50 AM.",
+      "title": "New Office Meeting Request",
+      "message": "Customer @customer requested an in-office office meeting on 2026-03-09 10:50 AM.",
       "appointmentId": "",
       "meta": {
         "customer": "customer",
@@ -409,7 +409,7 @@
       "message": "Agent @agent confirmed Investment Property Rental House on 2026-03-13 10:40 AM.",
       "appointmentId": "APP-3E7651A3",
       "meta": {
-        "status": "approved",
+        "status": "confirmed",
         "propertyId": "PROP-978D0F81",
         "propertyTitle": "Investment Property Rental House",
         "agent": "agent",

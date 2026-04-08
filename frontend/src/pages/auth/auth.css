@@ -1,0 +1,621 @@
+.auth-shell{
+  min-height:100vh;
+  padding:34px 16px;
+  background:
+    radial-gradient(700px 340px at 50% -12%, rgba(31,58,95,.11), transparent 64%),
+    radial-gradient(540px 300px at 8% 100%, rgba(21,29,40,.08), transparent 70%),
+    linear-gradient(180deg, #f8fafc, #eff3f8 260px, #edf1f6 100%);
+}
+
+.auth-page{
+  width:100%;
+  max-width:520px;
+  margin:0 auto;
+}
+
+.auth-page-login{display:block}
+.auth-page-login{max-width:620px}
+
+.auth-login-top{
+  text-align:center;
+  margin:6px 0 20px;
+}
+
+.auth-login-brand{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  font-size:2rem;
+  font-weight:800;
+  letter-spacing:-.02em;
+}
+
+.auth-login-brand-copy{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+  line-height:1;
+}
+
+.auth-login-brand-copy strong{
+  font-size:1.15rem;
+  font-weight:800;
+  letter-spacing:-.02em;
+  color:#0f172a;
+}
+
+.auth-login-brand-copy span{
+  font-size:.72rem;
+  font-weight:700;
+  letter-spacing:.18em;
+  color:#64748b;
+}
+
+.auth-login-top p{
+  margin:9px 0 0;
+  color:#5d6a7b;
+  font-size:1.08rem;
+}
+
+.auth-top-microcopy{
+  margin-top:6px;
+  color:#6d7d91;
+  font-size:.94rem;
+  font-weight:600;
+}
+
+.auth-page .card,
+.auth-login-card{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:20px;
+  box-shadow:0 14px 32px rgba(15,23,42,.1);
+  padding:26px;
+}
+
+.auth-login-logo{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.auth-logo-mark{
+  width:36px;
+  height:36px;
+  border-radius:8px;
+  display:grid;
+  place-items:center;
+  background:#111;
+  color:#fff;
+}
+
+.auth-login-logo strong{
+  font-size:1.35rem;
+  letter-spacing:-.01em;
+}
+
+.auth-page-login .auth-login-card{
+  background:linear-gradient(180deg, #f9fcff 0%, #f2f6fb 100%);
+  border-color:#d5deea;
+  box-shadow:0 20px 40px rgba(20,30,44,.1);
+  padding:30px;
+  border-radius:22px;
+  animation:login-card-in .35s ease-out;
+}
+
+.auth-page-login .auth-login-header{
+  margin-bottom:12px;
+}
+
+.auth-page-login .auth-login-header .title{
+  font-size:2.25rem;
+  line-height:1.08;
+  letter-spacing:-.03em;
+}
+
+.auth-page-login .auth-login-header .sub{
+  color:#5d6a7b;
+  font-size:1.05rem;
+}
+
+.auth-page.single{max-width:980px}
+.auth-page .card.narrow{max-width:980px;margin:0 auto}
+
+.auth-page .header{margin-bottom:10px}
+.auth-page .title{font-size:1.55rem;font-weight:800;color:var(--text);letter-spacing:-.02em}
+.auth-page .sub{color:var(--muted);font-size:.93rem}
+.auth-page .label{font-size:.85rem;color:var(--label,#475569);font-weight:700;margin:10px 0 6px;display:block}
+.auth-page-login .label{
+  font-size:.95rem;
+  margin:12px 0 7px;
+}
+
+.auth-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+
+.auth-page .input{
+  width:100%;
+  padding:12px 13px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  outline:none;
+  font-size:.96rem;
+  background:#fff;
+  transition:border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+.auth-input-row{
+  position:relative;
+}
+
+.auth-input-row .input{
+  padding-right:44px;
+}
+
+.auth-input-toggle{
+  position:absolute;
+  right:8px;
+  top:50%;
+  transform:translateY(-50%);
+  border:0;
+  background:transparent;
+  color:var(--muted);
+  width:34px;
+  height:34px;
+  border-radius:10px;
+  display:grid;
+  place-items:center;
+}
+
+.auth-input-toggle:hover{
+  background:rgba(31,58,95,.08);
+  color:var(--primary);
+}
+
+.auth-page .input:focus{
+  border-color:rgba(31,58,95,.7);
+  box-shadow:0 0 0 .25rem rgba(31,58,95,.14);
+}
+
+.auth-page-login .input:focus{
+  border-color:#19273b;
+  box-shadow:0 0 0 .22rem rgba(25,39,59,.12);
+}
+
+.auth-page .btn-primary{
+  width:100%;
+  border:1px solid transparent;
+  background:linear-gradient(135deg,#1e293b,#334155);
+  color:#fff;
+  padding:12px 14px;
+  border-radius:13px;
+  font-weight:800;
+  cursor:pointer;
+  margin-top:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:50px;
+}
+
+.auth-page-login .btn-primary{
+  background:linear-gradient(180deg, #25374d 0%, #172434 100%);
+  border-color:#172434;
+  color:#fff;
+  margin-top:16px;
+  min-height:54px;
+  border-radius:12px;
+  font-size:1.02rem;
+  letter-spacing:.01em;
+  box-shadow:0 10px 20px rgba(12,22,35,.2);
+  transition:transform .15s ease, box-shadow .2s ease, background .2s ease;
+}
+
+.auth-page-login .btn-primary:hover{
+  filter:none;
+  background:linear-gradient(180deg, #1f2f44 0%, #121d2b 100%);
+  transform:translateY(-1px);
+  box-shadow:0 14px 24px rgba(12,22,35,.24);
+}
+
+.auth-page .btn-primary:disabled{
+  opacity:.6;
+  cursor:not-allowed;
+  filter:none;
+}
+
+.auth-page .btn-primary:hover{filter:brightness(.97)}
+
+.demo-divider{
+  margin:14px 0 10px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--muted);
+  font-size:.7rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.demo-divider::before,
+.demo-divider::after{
+  content:"";
+  flex:1;
+  height:1px;
+  background:var(--line);
+}
+
+.demo-list{display:grid;gap:8px}
+
+.demo-row{
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#f4f4f5;
+  padding:9px 11px;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:8px;
+  align-items:center;
+}
+
+.demo-row strong{font-size:.88rem;color:var(--text)}
+.demo-row span{color:var(--muted);font-size:.86rem}
+
+.signup-row{
+  margin-top:16px;
+  padding-top:14px;
+  border-top:1px solid rgba(25,39,59,.14);
+  text-align:center;
+  color:var(--muted);
+  font-size:.95rem;
+}
+
+.auth-page .link{color:var(--primary);text-decoration:none;font-weight:800}
+.auth-page .row-links{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+
+.auth-friendly-chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:14px;
+}
+
+.auth-friendly-chips span{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:1px solid #d8e2f0;
+  background:#f6faff;
+  color:#2f4562;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:.8rem;
+  font-weight:800;
+}
+
+.auth-friendly-chips i{
+  color:#1e3a5f;
+}
+
+.auth-login-links{
+  margin-top:10px;
+}
+
+.auth-page-login .link{
+  color:#0f1e2f;
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+
+@keyframes login-card-in{
+  from{
+    opacity:0;
+    transform:translateY(10px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0);
+  }
+}
+
+.auth-page-register .card.narrow{
+  background:linear-gradient(180deg,#f8fbff 0%,#f3f6fb 100%);
+  border-color:#d5deea;
+  box-shadow:0 20px 40px rgba(20,30,44,.1);
+  padding:30px;
+}
+
+.auth-page-register .header .sub{
+  color:#5d6a7b;
+}
+
+.auth-page-register .btn-primary{
+  background:linear-gradient(180deg, #25374d 0%, #172434 100%);
+  border-color:#172434;
+  color:#fff;
+}
+
+.auth-page-register .btn-primary:hover{
+  filter:none;
+  background:linear-gradient(180deg, #1f2f44 0%, #121d2b 100%);
+}
+
+@media (max-width:860px){
+  .auth-shell{padding:20px 10px}
+  .auth-grid{grid-template-columns:1fr}
+  .auth-page-login .auth-login-header .title{font-size:2rem}
+  .auth-page-login .auth-login-card{padding:22px}
+  .auth-page-register .card.narrow{padding:22px}
+  .auth-page .input{font-size:1rem}
+}
+
+@media (max-width:520px){
+  .auth-login-brand{font-size:1.8rem}
+  .auth-login-top p{font-size:1rem}
+  .auth-page-login .auth-login-header .title{font-size:2.05rem}
+}
+
+/* ── Inline field validation ─────────────────────── */
+.auth-page .input--invalid{
+  border-color:#dc3545;
+  box-shadow:0 0 0 .22rem rgba(220,53,69,.13);
+}
+.auth-page .input--invalid:focus{
+  border-color:#dc3545;
+  box-shadow:0 0 0 .22rem rgba(220,53,69,.18);
+}
+.auth-page .field-error{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  font-size:.78rem;
+  font-weight:600;
+  color:#dc3545;
+  margin-top:4px;
+  animation:field-error-in .18s ease-out;
+}
+@keyframes field-error-in{
+  from{opacity:0;transform:translateY(-4px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ── Styled server/API error box ─────────────────── */
+.auth-server-error{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  background:#fff5f5;
+  border:1px solid #fca5a5;
+  border-left:3px solid #dc3545;
+  border-radius:10px;
+  padding:10px 12px;
+  font-size:.88rem;
+  color:#991b1b;
+  font-weight:600;
+  margin-bottom:14px;
+  animation:field-error-in .2s ease-out;
+}
+.auth-server-error i{margin-top:1px;flex-shrink:0;color:#dc3545}
+
+/* ── Auth page polish ──────────────────────────────────────── */
+
+/* Friendly chips — slightly cleaner */
+.auth-friendly-chips span{
+  border-color:#d5e3f5;
+  background:#f4f9ff;
+  color:#2a4263;
+  font-size:.79rem;
+  padding:5px 10px;
+}
+
+.auth-friendly-chips i{
+  color:#2563eb;
+}
+
+/* Focus ring — consistent blue accent */
+.auth-page .input:focus{
+  border-color:#2563eb;
+  box-shadow:0 0 0 .22rem rgba(37,99,235,.14);
+}
+
+.auth-page-login .input:focus{
+  border-color:#2563eb;
+  box-shadow:0 0 0 .22rem rgba(37,99,235,.12);
+}
+
+/* Login page brand logo — consistent dark */
+.auth-logo-mark{
+  background:linear-gradient(135deg,#1e293b,#334155);
+}
+
+/* Demo row — slightly tighter */
+.demo-row{
+  background:#f8fafc;
+  border-color:#e2e8f0;
+}
+
+/* Auth link — use brand color */
+.auth-page .link{
+  color:#1d4ed8;
+}
+.auth-page-login .link{
+  color:#1d4ed8;
+  text-decoration-color:rgba(29,78,216,.4);
+}
+
+/* ── Pass 2: Validation positive state ───────────────────── */
+.auth-page .input--valid{
+  border-color:#10b981;
+  background:#f0fdf4;
+  box-shadow:0 0 0 .2rem rgba(16,185,129,.1);
+}
+.auth-page .input--valid:focus{
+  border-color:#059669;
+  box-shadow:0 0 0 .22rem rgba(16,185,129,.18);
+}
+
+/* Improved field-error — more visible with background */
+.auth-page .field-error{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:.82rem;
+  font-weight:600;
+  color:#b91c1c;
+  background:#fef2f2;
+  border:1px solid #fecaca;
+  border-left:3px solid #dc3545;
+  border-radius:7px;
+  padding:6px 10px;
+  margin-top:5px;
+  animation:field-error-in .18s ease-out;
+}
+.auth-page .field-error i{flex-shrink:0;color:#dc3545}
+
+/* Success box for ForgotPassword and similar */
+.auth-success-box{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  background:#f0fdf4;
+  border:1px solid #bbf7d0;
+  border-left:3px solid #10b981;
+  border-radius:10px;
+  padding:10px 12px;
+  font-size:.88rem;
+  color:#065f46;
+  font-weight:600;
+  margin-bottom:14px;
+  animation:field-error-in .2s ease-out;
+}
+.auth-success-box i{margin-top:1px;flex-shrink:0;color:#10b981}
+
+/* ── Pass 2: Auth shell warmer background ──────────────── */
+.auth-shell{
+  background:
+    radial-gradient(700px 360px at 50% -10%, rgba(37,99,235,.07), transparent 60%),
+    radial-gradient(600px 400px at 5% 110%, rgba(16,185,129,.05), transparent 70%),
+    radial-gradient(800px 500px at 95% 80%, rgba(139,92,246,.04), transparent 70%),
+    linear-gradient(180deg, #f0f4fb 0%, #eaf0f8 200px, #e8eef6 100%);
+}
+
+/* ── Pass 2: Login card — blue-tinted gradient ─────────── */
+.auth-page-login .auth-login-card{
+  background:linear-gradient(160deg, #fafcff 0%, #f2f6fc 50%, #edf4fd 100%);
+  border-color:#c9d8ee;
+  box-shadow:0 24px 48px rgba(15,30,60,.11), 0 4px 12px rgba(37,99,235,.06);
+}
+
+/* ── Pass 2: Input field — more padding, warmer border ── */
+.auth-page .input{
+  padding:13px 14px;
+  border-color:#d0d9e8;
+  background:#fafbfd;
+}
+.auth-page .input:hover{
+  border-color:#b8c6db;
+  background:#fff;
+}
+
+/* ── Pass 2: Feature pills with colored icons ───────────── */
+.auth-friendly-chips span{
+  border-color:#dbeafe;
+  background:linear-gradient(135deg, #f0f7ff, #e8f2ff);
+  color:#1e40af;
+  font-size:.8rem;
+  font-weight:700;
+  padding:6px 11px;
+  box-shadow:0 1px 3px rgba(37,99,235,.08);
+  transition:box-shadow .15s ease, transform .15s ease;
+}
+.auth-friendly-chips span:hover{
+  box-shadow:0 3px 8px rgba(37,99,235,.14);
+  transform:translateY(-1px);
+}
+.auth-friendly-chips i{
+  color:#2563eb;
+  font-size:.85rem;
+}
+
+/* ── Pass 2: Primary button glow on hover ───────────────── */
+.auth-page-login .btn-primary:active{
+  transform:translateY(0);
+  box-shadow:0 6px 14px rgba(12,22,35,.18);
+}
+
+.auth-page-register .btn-primary:hover{
+  filter:none;
+  background:linear-gradient(180deg, #1f2f44 0%, #121d2b 100%);
+  box-shadow:0 10px 22px rgba(12,22,35,.22);
+  transform:translateY(-1px);
+}
+.auth-page-register .btn-primary{
+  transition:transform .15s ease, box-shadow .2s ease, background .2s ease;
+}
+
+/* ── Pass 2: Register card — warmer tint ───────────────── */
+.auth-page-register .card.narrow{
+  background:linear-gradient(160deg, #fafcff 0%, #f3f7fc 50%, #eef4fb 100%);
+  border-color:#c9d8ee;
+  box-shadow:0 24px 48px rgba(15,30,60,.11), 0 4px 12px rgba(37,99,235,.05);
+}
+
+/* ── Pass 2: Reset page card — consistent style ─────────── */
+.auth-page-reset .auth-login-card{
+  background:linear-gradient(160deg, #fafcff 0%, #f2f6fc 50%, #edf4fd 100%);
+  border-color:#c9d8ee;
+  box-shadow:0 20px 40px rgba(15,30,60,.1), 0 4px 12px rgba(37,99,235,.05);
+  padding:28px;
+  border-radius:22px;
+  animation:login-card-in .35s ease-out;
+}
+.auth-page-reset .auth-login-header .title{
+  font-size:1.6rem;
+  letter-spacing:-.02em;
+}
+.auth-page-reset .btn-primary{
+  background:linear-gradient(180deg, #25374d 0%, #172434 100%);
+  border-color:#172434;
+  min-height:52px;
+  border-radius:12px;
+  font-size:1rem;
+  letter-spacing:.01em;
+  box-shadow:0 8px 18px rgba(12,22,35,.18);
+  transition:transform .15s ease, box-shadow .2s ease, background .2s ease;
+}
+.auth-page-reset .btn-primary:hover{
+  background:linear-gradient(180deg, #1f2f44 0%, #121d2b 100%);
+  transform:translateY(-1px);
+  box-shadow:0 12px 24px rgba(12,22,35,.22);
+}
+
+/* ── Pass 2: Brand top header for reset page ────────────── */
+.auth-page-reset .auth-login-top{
+  margin-bottom:22px;
+}
+
+/* ── Pass 2: Auth grid gap improvement ──────────────────── */
+.auth-grid{
+  gap:14px;
+}
+
+/* ── Pass 2: Signup row separator polish ─────────────────── */
+.signup-row{
+  border-top-color:rgba(37,99,235,.12);
+}
+
+/* ── Pass 2: Row links alignment ────────────────────────── */
+.auth-page .row-links{
+  margin-top:14px;
+}
+
+/* ── Pass 2: Mobile — reset page ───────────────────────── */
+@media (max-width:860px){
+  .auth-page-reset .auth-login-card{padding:20px}
+}
