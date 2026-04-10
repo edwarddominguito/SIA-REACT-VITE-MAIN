@@ -35,7 +35,8 @@ export const registerMessagesServiceRoutes = (api, model) => {
     persistMessageNotification,
     verifyHttpsmsWebhookSignature,
     extractHttpsmsMessagePayload,
-    HTTPSMS_FROM
+    HTTPSMS_FROM,
+    isStorageFallbackActive
   } = deps;
 
 api.get("/messages/stream", requireRole(["admin", "agent", "customer"]), asyncHandler(async (req, res) => {
@@ -127,27 +128,73 @@ api.get("/messages", requireRole(["admin", "agent", "customer"]), asyncHandler(a
   const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 200);
   const currentUserPhone = normalizeSmsPhone(currentUser?.phone);
   const contactUserPhone = normalizeSmsPhone(contactUser?.phone);
-  const [rows] = await dbPool.query(
-    `SELECT m.id, m.direction, m.channel, m.provider, m.provider_message_id, m.provider_status,
-            m.sender_phone, m.recipient_phone, m.content, m.error_message, m.meta, m.read_at, m.created_at, m.updated_at,
-            su.username AS sender_username, su.full_name AS sender_full_name, su.role AS sender_role,
-            ru.username AS recipient_username, ru.full_name AS recipient_full_name, ru.role AS recipient_role
-     FROM messages m
-     LEFT JOIN users su ON su.id = m.sender_user_id
-     LEFT JOIN users ru ON ru.id = m.recipient_user_id
-       WHERE (
-          (m.sender_user_id = ? AND m.recipient_user_id = ?)
-          OR
-          (m.sender_user_id = ? AND m.recipient_user_id = ?)
-          OR
-          (m.sender_phone = ? AND m.recipient_phone = ?)
-          OR
-          (m.sender_phone = ? AND m.recipient_phone = ?)
-       )
-       ORDER BY m.created_at DESC, m.id DESC
-       LIMIT ?`,
-      [currentUser.id, contactUser.id, contactUser.id, currentUser.id, currentUserPhone, contactUserPhone, contactUserPhone, currentUserPhone, limit]
-    );
+  const rows = isStorageFallbackActive()
+    ? normalizeRecordCollection(db.messages)
+        .filter((message) => {
+          const senderUserId = clean(message?.senderUserId, 64);
+          const recipientUserId = clean(message?.recipientUserId, 64);
+          const senderPhone = normalizeSmsPhone(message?.senderPhone);
+          const recipientPhone = normalizeSmsPhone(message?.recipientPhone);
+          return (
+            (senderUserId === currentUser.id && recipientUserId === contactUser.id)
+            || (senderUserId === contactUser.id && recipientUserId === currentUser.id)
+            || (currentUserPhone && contactUserPhone && senderPhone === currentUserPhone && recipientPhone === contactUserPhone)
+            || (currentUserPhone && contactUserPhone && senderPhone === contactUserPhone && recipientPhone === currentUserPhone)
+          );
+        })
+        .sort((a, b) => {
+          const timeDelta = Date.parse(b?.createdAt || "") - Date.parse(a?.createdAt || "");
+          if (Number.isFinite(timeDelta) && timeDelta !== 0) return timeDelta;
+          return String(b?.id || "").localeCompare(String(a?.id || ""));
+        })
+        .slice(0, limit)
+        .map((message) => {
+          const senderUser = findUserRecord(db, clean(message?.senderUserId, 64));
+          const recipientUser = findUserRecord(db, clean(message?.recipientUserId, 64));
+          return {
+            id: message.id,
+            direction: message.direction,
+            channel: message.channel,
+            provider: message.provider,
+            provider_message_id: message.providerMessageId,
+            provider_status: message.providerStatus,
+            sender_phone: message.senderPhone,
+            recipient_phone: message.recipientPhone,
+            content: message.content,
+            error_message: message.errorMessage,
+            meta: message.meta,
+            read_at: message.readAt,
+            created_at: message.createdAt,
+            updated_at: message.updatedAt,
+            sender_username: senderUser?.username || "",
+            sender_full_name: senderUser?.fullName || "",
+            sender_role: senderUser?.role || "",
+            recipient_username: recipientUser?.username || "",
+            recipient_full_name: recipientUser?.fullName || "",
+            recipient_role: recipientUser?.role || ""
+          };
+        })
+    : (await dbPool.query(
+      `SELECT m.id, m.direction, m.channel, m.provider, m.provider_message_id, m.provider_status,
+              m.sender_phone, m.recipient_phone, m.content, m.error_message, m.meta, m.read_at, m.created_at, m.updated_at,
+              su.username AS sender_username, su.full_name AS sender_full_name, su.role AS sender_role,
+              ru.username AS recipient_username, ru.full_name AS recipient_full_name, ru.role AS recipient_role
+       FROM messages m
+       LEFT JOIN users su ON su.id = m.sender_user_id
+       LEFT JOIN users ru ON ru.id = m.recipient_user_id
+         WHERE (
+            (m.sender_user_id = ? AND m.recipient_user_id = ?)
+            OR
+            (m.sender_user_id = ? AND m.recipient_user_id = ?)
+            OR
+            (m.sender_phone = ? AND m.recipient_phone = ?)
+            OR
+            (m.sender_phone = ? AND m.recipient_phone = ?)
+         )
+         ORDER BY m.created_at DESC, m.id DESC
+         LIMIT ?`,
+        [currentUser.id, contactUser.id, contactUser.id, currentUser.id, currentUserPhone, contactUserPhone, contactUserPhone, currentUserPhone, limit]
+      ))[0];
 
   const messages = rows
     .slice()
@@ -377,14 +424,31 @@ api.post("/messages/webhooks/httpsms", asyncHandler(async (req, res) => {
     const senderUser = findUserByNormalizedPhone(db.users, payload.from);
     let recipientUser = null;
 
-    const [recentRows] = await dbPool.query(
-      `SELECT m.sender_user_id, m.recipient_user_id
-       FROM messages m
-       WHERE m.sender_phone = ? OR m.recipient_phone = ?
-       ORDER BY m.created_at DESC, m.id DESC
-       LIMIT 5`,
-      [payload.from, payload.from]
-    );
+    const recentRows = isStorageFallbackActive()
+      ? normalizeRecordCollection(db.messages)
+          .filter((message) => {
+            const senderPhone = normalizeSmsPhone(message?.senderPhone);
+            const recipientPhone = normalizeSmsPhone(message?.recipientPhone);
+            return senderPhone === payload.from || recipientPhone === payload.from;
+          })
+          .sort((a, b) => {
+            const timeDelta = Date.parse(b?.createdAt || "") - Date.parse(a?.createdAt || "");
+            if (Number.isFinite(timeDelta) && timeDelta !== 0) return timeDelta;
+            return String(b?.id || "").localeCompare(String(a?.id || ""));
+          })
+          .slice(0, 5)
+          .map((message) => ({
+            sender_user_id: clean(message?.senderUserId, 64),
+            recipient_user_id: clean(message?.recipientUserId, 64)
+          }))
+      : (await dbPool.query(
+        `SELECT m.sender_user_id, m.recipient_user_id
+         FROM messages m
+         WHERE m.sender_phone = ? OR m.recipient_phone = ?
+         ORDER BY m.created_at DESC, m.id DESC
+         LIMIT 5`,
+        [payload.from, payload.from]
+      ))[0];
 
     for (const row of recentRows) {
       const senderId = clean(row?.sender_user_id, 64);
@@ -442,14 +506,40 @@ api.post("/messages/webhooks/httpsms", asyncHandler(async (req, res) => {
       "failed";
 
     const db = await loadDb();
-    const [matchingRows] = await dbPool.query(
-      `SELECT id, sender_user_id, recipient_user_id, channel, provider, provider_message_id, provider_status, sender_phone, recipient_phone, content, error_message, meta, read_at, created_at, updated_at
-       FROM messages
-       WHERE provider_message_id = ?
-       ORDER BY created_at DESC, id DESC
-       LIMIT 20`,
-      [payload.providerMessageId]
-    );
+    const matchingRows = isStorageFallbackActive()
+      ? normalizeRecordCollection(db.messages)
+          .filter((message) => clean(message?.providerMessageId, 128) === payload.providerMessageId)
+          .sort((a, b) => {
+            const timeDelta = Date.parse(b?.createdAt || "") - Date.parse(a?.createdAt || "");
+            if (Number.isFinite(timeDelta) && timeDelta !== 0) return timeDelta;
+            return String(b?.id || "").localeCompare(String(a?.id || ""));
+          })
+          .slice(0, 20)
+          .map((message) => ({
+            id: message.id,
+            sender_user_id: clean(message?.senderUserId, 64),
+            recipient_user_id: clean(message?.recipientUserId, 64),
+            channel: message.channel,
+            provider: message.provider,
+            provider_message_id: message.providerMessageId,
+            provider_status: message.providerStatus,
+            sender_phone: message.senderPhone,
+            recipient_phone: message.recipientPhone,
+            content: message.content,
+            error_message: message.errorMessage,
+            meta: message.meta,
+            read_at: message.readAt,
+            created_at: message.createdAt,
+            updated_at: message.updatedAt
+          }))
+      : (await dbPool.query(
+        `SELECT id, sender_user_id, recipient_user_id, channel, provider, provider_message_id, provider_status, sender_phone, recipient_phone, content, error_message, meta, read_at, created_at, updated_at
+         FROM messages
+         WHERE provider_message_id = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT 20`,
+        [payload.providerMessageId]
+      ))[0];
 
     for (const row of matchingRows) {
       const channel = clean(row?.channel, 20).toLowerCase() || "sms";

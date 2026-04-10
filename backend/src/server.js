@@ -1766,7 +1766,93 @@ const parseNumber = (value) => {
 const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 const isHHMM = (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
 const makeId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const allowEphemeralDbFallback = () => {
+  const normalized = String(process.env.VERCEL_ALLOW_EPHEMERAL_DB_FALLBACK || "true").trim().toLowerCase();
+  return isVercelRuntime && !["0", "false", "no", "off"].includes(normalized);
+};
+const isStorageFallbackActive = () => allowEphemeralDbFallback() && Boolean(startupRuntimeState.lastError);
+const parseFallbackMeta = (value) => {
+  if (typeof value === "string") {
+    try {
+      return sanitizeStateMeta(JSON.parse(value));
+    } catch {
+      return {};
+    }
+  }
+  return sanitizeStateMeta(value);
+};
+const normalizeFallbackMessageRecord = (record) => {
+  const channel = clean(record?.channel, 20).toLowerCase() || "app";
+  return {
+    id: clean(record?.id, 64) || makeId("MSG"),
+    senderUserId: clean(record?.senderUserId ?? record?.sender_user_id, 64),
+    recipientUserId: clean(record?.recipientUserId ?? record?.recipient_user_id, 64),
+    direction: clean(record?.direction, 20) || "outbound",
+    channel,
+    provider: clean(record?.provider, 30) || (channel === "sms" ? "httpsms" : "internal"),
+    providerMessageId: clean(record?.providerMessageId ?? record?.provider_message_id, 128),
+    providerStatus: clean(record?.providerStatus ?? record?.provider_status, 30) || (channel === "sms" ? "pending" : "sent"),
+    senderPhone: normalizeSmsPhone(record?.senderPhone ?? record?.sender_phone),
+    recipientPhone: normalizeSmsPhone(record?.recipientPhone ?? record?.recipient_phone),
+    content: clean(record?.content, 1500),
+    errorMessage: clean(record?.errorMessage ?? record?.error_message, 500),
+    meta: parseFallbackMeta(record?.meta),
+    readAt: toIso(record?.readAt ?? record?.read_at) || null,
+    createdAt: toIso(record?.createdAt ?? record?.created_at) || new Date().toISOString(),
+    updatedAt: toIso(record?.updatedAt ?? record?.updated_at) || null
+  };
+};
+const loadFallbackDb = ({ forceReload = false } = {}) => {
+  if (!forceReload && cachedDb) {
+    return clone(cachedDb);
+  }
+
+  let parsed = {};
+  if (fs.existsSync(legacyDbPath)) {
+    try {
+      const raw = fs.readFileSync(legacyDbPath, "utf-8");
+      parsed = raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      console.warn("Failed to read backend/data/db.json for fallback storage:", error);
+    }
+  }
+
+  const normalized = {
+    ...defaultDb,
+    users: normalizeRecordCollection(parsed?.users).map((user) => sanitizeUserRecord(user)),
+    properties: normalizeRecordCollection(parsed?.properties).map((property) => sanitizePropertyRecord(property)),
+    appointments: normalizeRecordCollection(parsed?.appointments).map((appointment) => sanitizeAppointmentRecord(appointment)),
+    officeMeets: normalizeRecordCollection(parsed?.officeMeets).map((meet) => sanitizeOfficeMeetRecord(meet)),
+    reviews: normalizeRecordCollection(parsed?.reviews),
+    notifications: normalizeRecordCollection(parsed?.notifications),
+    trips: normalizeRecordCollection(parsed?.trips).map((trip) => sanitizeTripRecord(trip)),
+    messages: normalizeRecordCollection(parsed?.messages).map((message) => normalizeFallbackMessageRecord(message))
+  };
+  normalized.calendarEvents = buildCalendarEventsFromState(normalized);
+  cachedDb = ensureDemoUsers(normalized);
+  return clone(cachedDb);
+};
+const saveFallbackDb = async (nextDb) => {
+  const normalized = ensureDemoUsers({
+    ...defaultDb,
+    ...nextDb,
+    users: normalizeRecordCollection(nextDb?.users).map((user) => sanitizeUserRecord(user)),
+    properties: normalizeRecordCollection(nextDb?.properties).map((property) => sanitizePropertyRecord(property)),
+    appointments: normalizeRecordCollection(nextDb?.appointments).map((appointment) => sanitizeAppointmentRecord(appointment)),
+    officeMeets: normalizeRecordCollection(nextDb?.officeMeets).map((meet) => sanitizeOfficeMeetRecord(meet)),
+    reviews: normalizeRecordCollection(nextDb?.reviews),
+    notifications: normalizeRecordCollection(nextDb?.notifications),
+    trips: normalizeRecordCollection(nextDb?.trips).map((trip) => sanitizeTripRecord(trip)),
+    messages: normalizeRecordCollection(nextDb?.messages).map((message) => normalizeFallbackMessageRecord(message))
+  });
+  normalized.calendarEvents = buildCalendarEventsFromState(normalized);
+  cachedDb = clone(normalized);
+  return clone(cachedDb);
+};
 const loadDb = async ({ forceReload = false } = {}) => {
+  if (isStorageFallbackActive()) {
+    return loadFallbackDb({ forceReload });
+  }
   await ensureDbReady();
 
   const [usersRows] = await dbPool.query(`
@@ -2042,9 +2128,14 @@ const saveDb = async (nextDb) => {
     calendarEvents: [],
     reviews: normalizeRecordCollection(nextDb?.reviews),
     notifications: normalizeRecordCollection(nextDb?.notifications),
-    trips: normalizeRecordCollection(nextDb?.trips).map((trip) => sanitizeTripRecord(trip))
+    trips: normalizeRecordCollection(nextDb?.trips).map((trip) => sanitizeTripRecord(trip)),
+    messages: normalizeRecordCollection(nextDb?.messages).map((message) => normalizeFallbackMessageRecord(message))
   });
   normalized.calendarEvents = buildCalendarEventsFromState(normalized);
+  if (isStorageFallbackActive()) {
+    await saveFallbackDb(normalized);
+    return;
+  }
   const nextSnapshot = clone(normalized);
   await ensureDbReady();
   const users = dedupeUsersByUsername(nextSnapshot.users).map((user) => sanitizeUserRecord(user));
@@ -2767,6 +2858,42 @@ const buildMessageContactSummaries = async (db, currentUser) => {
   const userPhone = normalizeSmsPhone(currentUser?.phone);
   if (!userId && !userPhone) return new Map();
 
+  if (isStorageFallbackActive()) {
+    const rows = normalizeRecordCollection(db?.messages)
+      .map((message) => normalizeFallbackMessageRecord(message))
+      .sort((a, b) => {
+        const timeDelta = Date.parse(b.createdAt || "") - Date.parse(a.createdAt || "");
+        if (Number.isFinite(timeDelta) && timeDelta !== 0) return timeDelta;
+        return String(b.id || "").localeCompare(String(a.id || ""));
+      });
+
+    const next = new Map();
+    rows.forEach((row) => {
+      const senderUserId = clean(row?.senderUserId, 64);
+      const recipientUserId = clean(row?.recipientUserId, 64);
+      let counterpartUserId = "";
+
+      if (userId && senderUserId === userId) {
+        counterpartUserId = recipientUserId;
+      } else if (userId && recipientUserId === userId) {
+        counterpartUserId = senderUserId;
+      } else if (userPhone) {
+        const senderPhone = normalizeSmsPhone(row?.senderPhone);
+        const recipientPhone = normalizeSmsPhone(row?.recipientPhone);
+        const counterpartPhone = senderPhone === userPhone ? recipientPhone : (recipientPhone === userPhone ? senderPhone : "");
+        const counterpartUser = counterpartPhone ? findUserByNormalizedPhone(db?.users, counterpartPhone) : null;
+        counterpartUserId = clean(counterpartUser?.id, 64);
+      }
+
+      if (!counterpartUserId || next.has(counterpartUserId)) return;
+      next.set(counterpartUserId, {
+        lastMessage: clean(row?.content, 240),
+        lastMessageAt: toIso(row?.createdAt)
+      });
+    });
+    return next;
+  }
+
   const params = [userId || null, userId || null];
   let whereClause = `sender_user_id = ? OR recipient_user_id = ?`;
   if (userPhone) {
@@ -2810,6 +2937,7 @@ const buildMessageContactSummaries = async (db, currentUser) => {
 };
 
 const repairLegacyAppMessageParticipants = async () => {
+  if (isStorageFallbackActive()) return 0;
   const [brokenRows] = await dbPool.query(
     `SELECT id, sender_phone, recipient_phone
      FROM messages
@@ -3044,6 +3172,17 @@ const insertMessageRecord = async (record) => {
   const channel = clean(record?.channel, 20).toLowerCase() || "app";
   const provider = clean(record?.provider, 30) || (channel === "sms" ? "httpsms" : "internal");
   const providerStatus = clean(record?.providerStatus, 30) || (channel === "sms" ? "pending" : "sent");
+  if (isStorageFallbackActive()) {
+    cachedDb = loadFallbackDb();
+    const nextMessage = normalizeFallbackMessageRecord({
+      ...record,
+      channel,
+      provider,
+      providerStatus
+    });
+    cachedDb.messages = [nextMessage, ...normalizeRecordCollection(cachedDb.messages).map((message) => normalizeFallbackMessageRecord(message))];
+    return;
+  }
   await dbPool.query(
     `INSERT INTO messages
       (id, sender_user_id, recipient_user_id, direction, channel, provider, provider_message_id, provider_status, sender_phone, recipient_phone, content, error_message, meta, read_at, created_at)
@@ -3069,6 +3208,23 @@ const insertMessageRecord = async (record) => {
 };
 
 const updateMessageRecordState = async ({ id, provider, providerMessageId, providerStatus, errorMessage, meta }) => {
+  if (isStorageFallbackActive()) {
+    cachedDb = loadFallbackDb();
+    cachedDb.messages = normalizeRecordCollection(cachedDb.messages).map((message) => {
+      const normalized = normalizeFallbackMessageRecord(message);
+      if (clean(normalized.id, 64) !== clean(id, 64)) return normalized;
+      return normalizeFallbackMessageRecord({
+        ...normalized,
+        provider,
+        providerMessageId,
+        providerStatus,
+        errorMessage,
+        meta,
+        updatedAt: new Date().toISOString()
+      });
+    });
+    return;
+  }
   await dbPool.query(
     `UPDATE messages
      SET provider = ?, provider_message_id = ?, provider_status = ?, error_message = ?, meta = ?, updated_at = CURRENT_TIMESTAMP
@@ -4017,6 +4173,7 @@ const routeDeps = {
   persistMessageNotification,
   verifyHttpsmsWebhookSignature,
   extractHttpsmsMessagePayload,
+  isStorageFallbackActive,
   canAccessNotification,
   buildGoogleCalendarStatusSummary,
   isGoogleCalendarConfigured,
@@ -4062,6 +4219,9 @@ const ensureStartupBootstrap = async () => {
         return true;
       } catch (error) {
         markStartupFailure(error);
+        if (allowEphemeralDbFallback()) {
+          console.warn("Startup database bootstrap failed. Serving with ephemeral fallback storage for this Vercel runtime.");
+        }
         return false;
       }
     })();
@@ -4072,7 +4232,7 @@ const ensureStartupBootstrap = async () => {
 if (isVercelRuntime) {
   app.use(async (req, res, next) => {
     const bootstrapped = await ensureStartupBootstrap();
-    if (!bootstrapped && req.path !== "/health") {
+    if (!bootstrapped && !isStorageFallbackActive() && req.path !== "/health") {
       return res.status(503).json(buildServiceUnavailablePayload());
     }
     next();
@@ -4082,7 +4242,7 @@ if (isVercelRuntime) {
 app.use("/api", async (req, res, next) => {
   if (req.path === "/health") return next();
   const bootstrapped = await ensureStartupBootstrap();
-  if (!bootstrapped) {
+  if (!bootstrapped && !isStorageFallbackActive()) {
     return res.status(503).json(buildServiceUnavailablePayload());
   }
   next();
