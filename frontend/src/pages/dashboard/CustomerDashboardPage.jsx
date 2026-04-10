@@ -785,7 +785,7 @@ export default function CustomerDashboard() {
 
         {tab === "dashboard" && (
           <>
-            <section className="agent-stats-grid">
+            <section className="agent-stats-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
               <CustomerStatCard label="Total Appointments" value={myApps.length} icon="bi-calendar2-check" />
               <CustomerStatCard label="Pending Requests" value={myPending.length} icon="bi-hourglass-split" />
               <CustomerStatCard label="Upcoming Events" value={upcomingCalendarEvents.length} icon="bi-calendar3" />
@@ -831,72 +831,6 @@ export default function CustomerDashboard() {
                 </div>
               </article>
             </section>
-
-            <section className="agent-panel">
-              <div className="agent-panel-head">
-                <h3>Saved Properties</h3>
-              </div>
-              <div className="agent-property-grid">
-                {savedProperties.map((p) => {
-                  const facts = propertyFactItems(p);
-                  return (
-                  <article key={p.id} className="agent-property-card">
-                    <img
-                      src={withImage(p)}
-                      alt={p.title}
-                      onError={(e) => handlePropertyImageError(e, p)}
-                    />
-                    <div className="agent-property-body">
-                      <h4>{p.title}</h4>
-                      <p><i className="bi bi-geo-alt"></i> {p.location}</p>
-                      <strong>{propertyPriceLabel(p)}</strong>
-                      {facts.length ? (
-                        <div className="customer-property-facts">
-                          {facts.map((fact) => (
-                            <div key={fact.label} className="customer-property-fact">
-                              <span>{fact.label}:</span>
-                              <strong>{fact.value}</strong>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                      <div className="agent-property-actions">
-                        <Link className="btn btn-outline-dark btn-sm w-100" to={`/properties/${p.id}`} state={propertyLinkState}>
-                          View Property
-                        </Link>
-                      </div>
-                    </div>
-                  </article>
-                  );
-                })}
-                {!savedProperties.length && (
-                  <div className="agent-empty">
-                    <i className="bi bi-house-heart"></i>
-                    <p>Save properties by creating appointments or joining tours.</p>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="agent-panel">
-              <div className="agent-panel-head">
-                <h3>Quick Actions</h3>
-              </div>
-              <div className="customer-quick-actions">
-                <button type="button" className="btn btn-dark" onClick={() => handleCustomerTabChange("browse")}>
-                  Book New Appointment
-                </button>
-                <button type="button" className="btn btn-outline-dark" onClick={() => handleCustomerTabChange("appointments")}>
-                  Manage Appointments
-                </button>
-                <button type="button" className="btn btn-outline-dark" onClick={() => handleCustomerTabChange("calendar")}>
-                  Open Calendar
-                </button>
-                <button type="button" className="btn btn-outline-dark" onClick={() => handleCustomerTabChange("meets")}>
-                  Request Office Meeting
-                </button>
-              </div>
-            </section>
           </>
         )}
 
@@ -939,8 +873,6 @@ export default function CustomerDashboard() {
                     <div className="customer-browse-summary">
                       <h4 className="customer-browse-headline">
                         <span className="customer-browse-title">{p.title}</span>
-                        <span className="customer-browse-dot">&bull;</span>
-                        <span className="customer-browse-area">{propertyStatusLabel(p)}</span>
                       </h4>
                       <strong className="customer-browse-price">{propertyPriceLabel(p)}</strong>
                       <p className="customer-browse-detail-line">{detailLine}</p>
@@ -1029,28 +961,6 @@ export default function CustomerDashboard() {
                         <div className="bk-step-header">
                           <strong>Choose a schedule</strong>
                           <p>Pick a day and time for your property visit.</p>
-                        </div>
-
-                        {/* Appointment type */}
-                        <div className="bk-field">
-                          <label className="bk-label">Appointment type</label>
-                          <div className="bk-type-grid">
-                            {[
-                              { value: "property_viewing", label: "Property Viewing", icon: "bi-house" },
-                              { value: "virtual_tour", label: "Virtual Tour", icon: "bi-camera-video" },
-                              { value: "consultation", label: "Consultation", icon: "bi-chat-text" }
-                            ].map((type) => (
-                              <button
-                                key={type.value}
-                                type="button"
-                                className={`bk-type-btn${booking.appointmentType === type.value ? " bk-type-btn--active" : ""}`}
-                                onClick={() => setBooking((b) => ({ ...b, appointmentType: type.value }))}
-                              >
-                                <i className={`bi ${type.icon}`}></i>
-                                <span>{type.label}</span>
-                              </button>
-                            ))}
-                          </div>
                         </div>
 
                         {/* Date */}
@@ -1211,7 +1121,6 @@ export default function CustomerDashboard() {
                           {[
                             ["Property", selectedBookingProperty.title || "(unknown)"],
                             ["Location", selectedBookingProperty.location || "-"],
-                            ["Type", appointmentTypeLabel(booking.appointmentType)],
                             ["Date", formatFriendlyBookingDate(booking.date)],
                             ["Time", formatClockTime(booking.time)],
                             ["Price", propertyPriceLabel(selectedBookingProperty)],
@@ -1340,7 +1249,6 @@ export default function CustomerDashboard() {
                           {[
                             ["Property", bookingSuccess?.propertyTitle || selectedBookingProperty.title],
                             ["Schedule", formatDateTimeLabel(bookingSuccess?.date || booking.date, bookingSuccess?.time || booking.time, { joiner: " at " })],
-                            ["Type", appointmentTypeLabel(bookingSuccess?.appointmentType || booking.appointmentType)],
                             ["Reference", bookingSuccess?.appointmentId || "—"]
                           ].map(([key, val]) => (
                             <div key={key} className="bk-review-row">
@@ -1729,98 +1637,97 @@ export default function CustomerDashboard() {
         )}
 
         {tab === "meets" && (
-          <>
-            <section className="agent-panel meets-unified-panel">
-              <div className="office-meet-form-panel unique-meet meets-form-wrap">
-                <div className="agent-panel-head">
-                  <h3>Request an Office Meeting</h3>
+          <section className="meet-page">
+            <div className="meet-page-inner">
+              {/* Page header */}
+              <div className="meet-page-header">
+                <div className="meet-page-icon"><i className="bi bi-calendar2-check"></i></div>
+                <div>
+                  <h2 className="meet-page-title">Request a Meeting</h2>
+                  <p className="meet-page-subtitle">Share your preferred schedule, meeting mode, and reason.</p>
                 </div>
-                <div className="meet-helper">
-                  Share your preferred schedule, meeting mode, and reason. Confirmed meetings will also appear in your calendar.
+              </div>
+
+              {/* Form card */}
+              <div className="meet-form-card">
+                {/* Meeting Mode — inline row */}
+                <div className="meet-mode-row">
+                  <span className="meet-section-label">Mode</span>
+                  <div className="meet-mode-group">
+                    <button
+                      type="button"
+                      className={meetForm.mode === "office" ? "active" : ""}
+                      onClick={() => setMeetForm((s) => ({ ...s, mode: "office" }))}
+                    >
+                      <i className="bi bi-building"></i>In Office
+                    </button>
+                    <button
+                      type="button"
+                      className={meetForm.mode === "virtual" ? "active" : ""}
+                      onClick={() => setMeetForm((s) => ({ ...s, mode: "virtual" }))}
+                    >
+                      <i className="bi bi-camera-video"></i>Virtual
+                    </button>
+                  </div>
                 </div>
 
-                <div className="row g-2">
-                  <div className="col-12">
-                    <label className="form-label">Meeting Mode</label>
-                    <div className="meet-mode-group">
-                      <button
-                        type="button"
-                        className={meetForm.mode === "office" ? "active" : ""}
-                        onClick={() => setMeetForm((s) => ({ ...s, mode: "office" }))}
-                      >
-                        <i className="bi bi-building"></i>In Office
-                      </button>
-                      <button
-                        type="button"
-                        className={meetForm.mode === "virtual" ? "active" : ""}
-                        onClick={() => setMeetForm((s) => ({ ...s, mode: "virtual" }))}
-                      >
-                        <i className="bi bi-camera-video"></i>Virtual
-                      </button>
+                <hr className="meet-divider" />
+
+                {/* Personal Info + Schedule — 6-column grid */}
+                <fieldset className="meet-section">
+                  <legend className="meet-section-label">Details</legend>
+                  <div className="meet-field-grid meet-grid-3">
+                    <div className="meet-field">
+                      <label className="form-label">Full Name</label>
+                      <input className="form-control" value={meetForm.fullName} onChange={(e) => setMeetForm((s) => ({ ...s, fullName: e.target.value }))} />
                     </div>
-                    <div className="meet-preview">
-                      Selected: <strong>{meetForm.mode === "virtual" ? "Virtual Meeting" : "In Office Meeting"}</strong>
+                    <div className="meet-field">
+                      <label className="form-label">Email</label>
+                      <input className="form-control" type="email" value={meetForm.email} onChange={(e) => setMeetForm((s) => ({ ...s, email: e.target.value }))} />
+                    </div>
+                    <div className="meet-field">
+                      <label className="form-label">Phone</label>
+                      <input className="form-control" value={meetForm.phone} onChange={(e) => setMeetForm((s) => ({ ...s, phone: e.target.value }))} />
+                    </div>
+                    <div className="meet-field">
+                      <label className="form-label">Date</label>
+                      <input
+                        className={`form-control ${meetTouched.date && meetDateError ? "is-invalid" : ""}`}
+                        type="date"
+                        value={meetForm.date}
+                        onBlur={() => setMeetTouched((s) => ({ ...s, date: true }))}
+                        onChange={(e) => {
+                          const nextDate = e.target.value;
+                          setMeetForm((s) => {
+                            const keepTime = s.time && isWithinOperatingHours(nextDate, s.time);
+                            return { ...s, date: nextDate, time: keepTime ? s.time : "" };
+                          });
+                        }}
+                      />
+                      {meetTouched.date && meetDateError && <div className="invalid-feedback d-block">{meetDateError}</div>}
+                    </div>
+                    <div className="meet-field">
+                      <label className="form-label">Time <span className="meet-hint-inline">{meetOperatingHours.label}</span></label>
+                      <input
+                        className={`form-control ${meetTouched.time && meetTimeError ? "is-invalid" : ""}`}
+                        type="time"
+                        min={meetOperatingHours.minTime || undefined}
+                        max={meetOperatingHours.maxTime || undefined}
+                        disabled={meetOperatingHours.isClosed}
+                        value={meetForm.time}
+                        onBlur={() => setMeetTouched((s) => ({ ...s, time: true }))}
+                        onChange={(e) => setMeetForm((s) => ({ ...s, time: e.target.value }))}
+                      />
+                      {meetTouched.time && meetTimeError && <div className="invalid-feedback d-block">{meetTimeError}</div>}
                     </div>
                   </div>
-                <div className="col-md-6">
-                  <label className="form-label">Full Name</label>
-                  <input className="form-control" value={meetForm.fullName} onChange={(e) => setMeetForm((s) => ({ ...s, fullName: e.target.value }))} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Email</label>
-                  <input className="form-control" type="email" value={meetForm.email} onChange={(e) => setMeetForm((s) => ({ ...s, email: e.target.value }))} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Phone</label>
-                  <input className="form-control" value={meetForm.phone} onChange={(e) => setMeetForm((s) => ({ ...s, phone: e.target.value }))} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Related Property</label>
-                  <select className="form-select" value={meetForm.relatedPropertyId} onChange={(e) => setMeetForm((s) => ({ ...s, relatedPropertyId: e.target.value }))}>
-                    <option value="">General consultation</option>
-                    {properties.map((property) => (
-                      <option key={property.id} value={property.id}>
-                        {property.title || "Property"}{property.location ? ` - ${property.location}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Preferred Date</label>
-                  <input
-                    className={`form-control ${meetTouched.date && meetDateError ? "is-invalid" : ""}`}
-                    type="date"
-                    value={meetForm.date}
-                    onBlur={() => setMeetTouched((s) => ({ ...s, date: true }))}
-                    onChange={(e) => {
-                      const nextDate = e.target.value;
-                      setMeetForm((s) => {
-                        const keepTime = s.time && isWithinOperatingHours(nextDate, s.time);
-                        return { ...s, date: nextDate, time: keepTime ? s.time : "" };
-                      });
-                    }}
-                  />
-                  {meetTouched.date && meetDateError && <div className="invalid-feedback d-block">{meetDateError}</div>}
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Preferred Time</label>
-                  <input
-                    className={`form-control ${meetTouched.time && meetTimeError ? "is-invalid" : ""}`}
-                    type="time"
-                    min={meetOperatingHours.minTime || undefined}
-                    max={meetOperatingHours.maxTime || undefined}
-                    disabled={meetOperatingHours.isClosed}
-                    value={meetForm.time}
-                    onBlur={() => setMeetTouched((s) => ({ ...s, time: true }))}
-                    onChange={(e) => setMeetForm((s) => ({ ...s, time: e.target.value }))}
-                  />
-                  <div className="meet-preview">
-                    Hours: {meetOperatingHours.label}
-                  </div>
-                  {meetTouched.time && meetTimeError && <div className="invalid-feedback d-block">{meetTimeError}</div>}
-                </div>
-                <div className="col-12">
-                  <label className="form-label">Reason</label>
+                </fieldset>
+
+                <hr className="meet-divider" />
+
+                {/* Reason */}
+                <fieldset className="meet-section">
+                  <legend className="meet-section-label">Reason</legend>
                   <div className="meet-reason-quick">
                     {MEET_REASON_TEMPLATES.map((item) => (
                       <button
@@ -1833,32 +1740,26 @@ export default function CustomerDashboard() {
                       </button>
                     ))}
                   </div>
-                  <textarea className="form-control" rows="4" value={meetForm.reason} onChange={(e) => setMeetForm((s) => ({ ...s, reason: e.target.value }))}></textarea>
+                  <textarea className="form-control" rows="2" placeholder="Describe the purpose of your meeting..." value={meetForm.reason} onChange={(e) => setMeetForm((s) => ({ ...s, reason: e.target.value }))}></textarea>
                   <div className="meet-char-count">{meetReasonLength}/600</div>
-                </div>
-                <div className="col-12">
-                  <label className="form-label">Notes</label>
-                  <textarea className="form-control" rows="3" value={meetForm.notes} onChange={(e) => setMeetForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Optional context, preferred agenda, or extra instructions"></textarea>
-                </div>
-                <div className="col-12">
-                  <div className="meet-submit-row">
-                    <button type="button" className="btn btn-outline-dark" onClick={resetMeetForm}>
-                      Clear
-                    </button>
-                      <button
-                        className="btn btn-dark"
-                        disabled={!canSubmitMeetRequest || isSubmittingMeet}
-                        onClick={submitMeetRequest}
-                      >
-                        {isSubmittingMeet ? "Submitting..." : "Submit Request"}
-                      </button>
-                  </div>
-                </div>
-              </div>
-              </div>
+                </fieldset>
 
-            </section>
-          </>
+                {/* Submit */}
+                <div className="meet-submit-row">
+                  <button type="button" className="btn btn-outline-dark" onClick={resetMeetForm}>
+                    Clear
+                  </button>
+                  <button
+                    className="btn btn-dark"
+                    disabled={!canSubmitMeetRequest || isSubmittingMeet}
+                    onClick={submitMeetRequest}
+                  >
+                    {isSubmittingMeet ? "Submitting..." : "Submit Request"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
         )}
 
         {tab === "profile" && (

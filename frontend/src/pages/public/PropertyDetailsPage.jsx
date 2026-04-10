@@ -131,12 +131,12 @@ export default function PublicPropertyDetails() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-lg bg-white">
               {previewImages.length ? (
                 <div className="grid gap-1 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)]">
                   <button
                     type="button"
-                    className="group relative overflow-hidden rounded-md text-left"
+                    className="group relative overflow-hidden text-left"
                     onClick={() => setSelectedImage(featuredImage)}
                   >
                     <div className="aspect-[4/3]">
@@ -153,7 +153,7 @@ export default function PublicPropertyDetails() {
                       <button
                         key={`${imageSrc}-${index}`}
                         type="button"
-                        className={`group relative overflow-hidden rounded-md text-left transition ${selectedImage === imageSrc ? "ring-2 ring-zinc-900 ring-offset-1 ring-offset-white" : ""}`}
+                        className={`group relative overflow-hidden text-left transition ${selectedImage === imageSrc ? "ring-2 ring-zinc-900 ring-offset-1 ring-offset-white" : ""}`}
                         onClick={() => setSelectedImage(imageSrc)}
                       >
                         <div className="aspect-[4/3]">

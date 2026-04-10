@@ -4,6 +4,8 @@ import LoginPage from "../pages/auth/LoginPage.jsx";
 import RegisterPage from "../pages/auth/RegisterPage.jsx";
 import AdminAddUserPage from "../pages/dashboard/AdminAddUserPage.jsx";
 import AdminDashboardPage from "../pages/dashboard/AdminDashboardPage.jsx";
+import AgentAddPropertyPage from "../pages/dashboard/AgentAddPropertyPage.jsx";
+import AgentScheduleTripPage from "../pages/dashboard/AgentScheduleTripPage.jsx";
 import AgentDashboardPage from "../pages/dashboard/AgentDashboardPage.jsx";
 import CustomerDashboardPage from "../pages/dashboard/CustomerDashboardPage.jsx";
 import NotificationsPage from "../pages/notifications/NotificationsPage.jsx";
@@ -23,5 +25,7 @@ export const dashboardRoutes = Object.freeze({
   admin: createElement(AdminDashboardPage),
   adminAddUser: createElement(AdminAddUserPage),
   agent: createElement(AgentDashboardPage),
+  agentAddProperty: createElement(AgentAddPropertyPage),
+  agentScheduleTrip: createElement(AgentScheduleTripPage),
   customer: createElement(CustomerDashboardPage)
 });
