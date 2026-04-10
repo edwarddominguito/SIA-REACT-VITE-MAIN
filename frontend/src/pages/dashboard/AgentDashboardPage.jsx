@@ -53,6 +53,7 @@ import {
 
 const PROPERTY_IMAGE_SLOT_COUNT = 5;
 const PROPERTY_IMAGE_EXTENSION_RE = /\.(png|jpe?g|webp|gif|avif|svg)(?:[?#].*)?$/i;
+const MEETS_PER_PAGE = 7;
 
 const emptyPropertyImageFields = () => Array.from({ length: PROPERTY_IMAGE_SLOT_COUNT }, () => "");
 
@@ -169,6 +170,8 @@ export default function AgentDashboard() {
   const [apps, setApps] = useState([]);
   const [trips, setTrips] = useState([]);
   const [meets, setMeets] = useState([]);
+  const [meetQuery, setMeetQuery] = useState("");
+  const [meetPage, setMeetPage] = useState(1);
   const [reviews, setReviews] = useState([]);
   const [reviewFilter, setReviewFilter] = useState("all");
   const [reviewQuery, setReviewQuery] = useState("");
@@ -588,6 +591,21 @@ export default function AgentDashboard() {
         return bSchedule.localeCompare(aSchedule);
       });
   }, [mineMeets]);
+  const filteredMeets = useMemo(() => {
+    const q = meetQuery.trim().toLowerCase();
+    if (!q) return sortedMeets;
+    return sortedMeets.filter((m) => (
+      (m.fullName || m.customer || m.requestedBy || "").toLowerCase().includes(q) ||
+      (m.email || "").toLowerCase().includes(q) ||
+      (m.reason || "").toLowerCase().includes(q) ||
+      (m.mode || "").toLowerCase().includes(q)
+    ));
+  }, [sortedMeets, meetQuery]);
+  const meetTotalPages = Math.max(1, Math.ceil(filteredMeets.length / MEETS_PER_PAGE));
+  const pagedMeets = useMemo(
+    () => filteredMeets.slice((meetPage - 1) * MEETS_PER_PAGE, meetPage * MEETS_PER_PAGE),
+    [filteredMeets, meetPage]
+  );
   const agentCalendarEvents = useMemo(() => {
     const appointmentEvents = mineApps.map((a) => ({
       id: `app-${a.id}`,
@@ -955,12 +973,6 @@ export default function AgentDashboard() {
             ))}
           </datalist>
         ) : null}
-        <section className="agent-hero">
-          <div>
-            <h1>{currentSectionLabel}</h1>
-          </div>
-        </section>
-
         {section === "dashboard" && (
           <>
             <section className="agent-panel">
@@ -1048,184 +1060,12 @@ export default function AgentDashboard() {
 
         {section === "properties" && (
           <>
-            <section className="agent-hero rowed">
-              <div>
-                <h1>My Properties</h1>
-              </div>
-              <button className="btn btn-dark" onClick={() => setShowAddProperty((v) => !v)}>
-                <i className="bi bi-plus-lg me-1"></i>{showAddProperty ? "Close Form" : "Add Property"}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',margin:'0 0 6px'}}>
+              <h1 style={{fontSize:'1.4rem',fontWeight:700,margin:0}}>My Properties</h1>
+              <button className="btn btn-dark btn-sm" onClick={() => navigate('/agent/add-property')}>
+                <i className="bi bi-plus-lg me-1"></i>Add Property
               </button>
-            </section>
-
-            {showAddProperty && (
-              <section className="agent-panel">
-                <div className="agent-panel-head"><h3>Create Property</h3></div>
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (isSavingProperty) return;
-                    const title = cleanText(pForm.title, 90);
-                    const location = cleanText(pForm.location, 120);
-                    const description = cleanText(pForm.description, 500);
-                    const price = toNonNegativeNumber(pForm.price, -1);
-                    const listingType = "sale";
-                    const propertyType = cleanText(pForm.propertyType || "property", 40).toLowerCase();
-                    const propertyStatus = String(pForm.propertyStatus || "available").toLowerCase();
-                    const bedrooms = toNonNegativeNumber(pForm.bedrooms, 0);
-                    const bathrooms = toNonNegativeNumber(pForm.bathrooms, 0);
-                    const areaSqft = toNonNegativeNumber(pForm.areaSqft, 0);
-                    const imageSlots = propertyImagePayloadFrom(pForm.imageUrls);
-                    const coverImage = imageSlots[0] || "";
-                    const galleryImages = imageSlots.slice(1, PROPERTY_IMAGE_SLOT_COUNT);
-
-                    if (!title || !location || price <= 0) {
-                      feedback.notify("Title, location, and price are required.", "error");
-                      return;
-                    }
-                    try {
-                      setIsSavingProperty(true);
-                      const res = await apiRequest("/api/properties", {
-                        method: "POST",
-                        body: JSON.stringify({
-                          title,
-                          location,
-                          price,
-                          listingType,
-                          propertyType,
-                          propertyStatus,
-                          bedrooms,
-                          bathrooms,
-                          areaSqft,
-                          description,
-                          imageUrl: coverImage,
-                          imageUrls: galleryImages,
-                          agent: user.username
-                        })
-                      });
-                      const savedProperty = res?.data;
-                      if (!savedProperty?.id) throw new Error("Property was not saved by the server.");
-                      const savedImageUrls = Array.isArray(savedProperty.imageUrls) ? savedProperty.imageUrls : galleryImages;
-                      const next = {
-                        ...savedProperty,
-                        imageUrl: savedProperty.imageUrl || coverImage || autoPropertyImage(savedProperty),
-                        imageUrls: savedImageUrls
-                      };
-                      saveProps([next, ...properties.filter((property) => String(property?.id || "") !== String(next.id))]);
-                      setShowAddProperty(false);
-                      setPForm(createEmptyPropertyForm());
-                      feedback.notify("Property saved.", "success");
-                    } catch (error) {
-                      feedback.notify(propertySaveErrorMessage(error, "Unable to save property."), "error");
-                    } finally {
-                      setIsSavingProperty(false);
-                    }
-                  }}
-                >
-                  <div className="row g-2">
-                    <div className="col-md-6"><input className="form-control" placeholder="Title" value={pForm.title} onChange={(e) => setPForm((s) => ({ ...s, title: e.target.value }))} /></div>
-                    <div className="col-md-6"><input className="form-control" placeholder="Location" value={pForm.location} onChange={(e) => setPForm((s) => ({ ...s, location: e.target.value }))} /></div>
-                    <div className="col-md-6"><input className="form-control" type="number" placeholder="Price" value={pForm.price} onChange={(e) => setPForm((s) => ({ ...s, price: e.target.value }))} /></div>
-                    <div className="col-md-6">
-                      <select className="form-select" value={pForm.propertyStatus} onChange={(e) => setPForm((s) => ({ ...s, propertyStatus: e.target.value }))}>
-                        <option value="available">Available</option>
-                        <option value="reserved">Reserved</option>
-                        <option value="inactive">Inactive</option>
-                      </select>
-                    </div>
-                    <div className="col-md-4"><input className="form-control" type="number" placeholder="Bedrooms" value={pForm.bedrooms} onChange={(e) => setPForm((s) => ({ ...s, bedrooms: e.target.value }))} /></div>
-                    <div className="col-md-4"><input className="form-control" type="number" placeholder="Bathrooms" value={pForm.bathrooms} onChange={(e) => setPForm((s) => ({ ...s, bathrooms: e.target.value }))} /></div>
-                    <div className="col-md-4"><input className="form-control" type="number" placeholder="Area sqft" value={pForm.areaSqft} onChange={(e) => setPForm((s) => ({ ...s, areaSqft: e.target.value }))} /></div>
-                    <div className="col-12">
-                      <textarea
-                        className="form-control"
-                        rows="3"
-                        placeholder="Description"
-                        value={pForm.description}
-                        onChange={(e) => setPForm((s) => ({ ...s, description: e.target.value }))}
-                      ></textarea>
-                    </div>
-                    <div className="col-12">
-                      <div className="small text-muted">
-                        Enter one image at a time. Files from <code>frontend/src/assets/images/</code> and <code>frontend/public/property-images/</code> are both supported.
-                        You can type just the filename, like <code>front.jpg</code>.
-                      </div>
-                    </div>
-                    {propertyAssetImageNames.length ? (
-                      <div className="col-12">
-                        <div className="d-flex flex-wrap align-items-center gap-2">
-                          <div className="small text-muted">
-                            Detected asset images: {propertyAssetImageNames.join(", ")}
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-outline-dark btn-sm"
-                            onClick={() => fillWithDetectedAssetImages(setPForm)}
-                          >
-                            Use Detected Images
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                    {pForm.imageUrls.map((imageUrl, index) => {
-                      const previewSrc = resolvePropertyImageSource(imageUrl);
-                      return (
-                        <div key={`create-property-image-${index}`} className="col-md-6">
-                          <label className="form-label small text-muted mb-1">
-                            Image {index + 1}{index === 0 ? " (cover)" : ""}
-                          </label>
-                          <div className="d-flex gap-2">
-                            <input
-                              className="form-control"
-                              placeholder={index === 0 ? "597272628_...jpg" : `image-${index + 1}.jpg`}
-                              list="property-asset-image-list"
-                              value={imageUrl}
-                              onChange={(e) => updatePropertyImageAt(index, e.target.value, setPForm)}
-                              onBlur={(e) => updatePropertyImageAt(index, cleanPropertyImageInput(e.target.value), setPForm)}
-                            />
-                            {imageUrl ? (
-                              <button
-                                type="button"
-                                className="btn btn-outline-dark"
-                                onClick={() => removePropertyImageAt(index, setPForm)}
-                              >
-                                Clear
-                              </button>
-                            ) : null}
-                          </div>
-                          {previewSrc ? (
-                            <div className="card mt-2 overflow-hidden">
-                              <img
-                                src={previewSrc}
-                                alt={`Property preview ${index + 1}`}
-                                className="w-100"
-                                style={{ aspectRatio: "4 / 3", objectFit: "contain", background: "#f4f4f5" }}
-                                onError={(e) => handlePropertyImageError(e, { title: pForm.title || "Property", location: pForm.location || "" })}
-                              />
-                              <div className="card-body py-2">
-                                <div className="small text-muted text-truncate">{previewSrc}</div>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="d-flex gap-2 mt-3">
-                    <button className="btn btn-dark" disabled={isSavingProperty}>
-                      {isSavingProperty ? "Saving..." : "Save Property"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-outline-dark"
-                      disabled={isSavingProperty}
-                      onClick={() => setPForm(createEmptyPropertyForm())}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </form>
-              </section>
-            )}
+            </div>
 
             {editProp && (
               <section className="agent-panel">
@@ -1457,33 +1297,7 @@ export default function AgentDashboard() {
 
         {section === "appointments" && (
           <>
-            <section className="agent-hero rowed">
-              <div>
-                <h1>Appointment Management</h1>
-              </div>
-              <div className="d-flex align-items-center gap-2 flex-wrap">
-                <select
-                  className="form-select agent-filter"
-                  value={myAvailabilityStatus}
-                  onChange={(e) => updateMyAvailabilityStatus(e.target.value)}
-                  title="Set your communication availability"
-                >
-                  <option value="available">Available</option>
-                  <option value="busy">Busy</option>
-                  <option value="offline">Offline</option>
-                </select>
-                <select className="form-select agent-filter" value={appFilter} onChange={(e) => setAppFilter(e.target.value)}>
-                  <option value="all">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="rescheduled">Rescheduled</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="no_show">No-show</option>
-                  <option value="expired">Expired</option>
-                </select>
-              </div>
-            </section>
+            <h1 style={{fontSize:'1.2rem',fontWeight:700,margin:'0 0 4px'}}>Appointment Management</h1>
 
             <section className="agent-panel">
               <div className="appointments-toolbar compact">
@@ -1509,7 +1323,7 @@ export default function AgentDashboard() {
               </div>
               {filteredApps.length ? (
                 <div className="table-responsive">
-                  <table className="table align-middle">
+                  <table className="table align-middle appointment-status-table">
                     <thead>
                       <tr><th>Property</th><th>Customer</th><th>Date/Time</th><th>Status</th><th></th></tr>
                     </thead>
@@ -1529,8 +1343,8 @@ export default function AgentDashboard() {
                                       onError={(e) => handlePropertyImageError(e, { id: a.propertyId, title: a.propertyTitle, location: a.location })}
                                     />
                                     <div>
-                                      <div className="fw-bold">{a.propertyTitle}</div>
-                                      <div className="small muted">{a.location}</div>
+                                      <div style={{fontWeight:600,fontSize:'.82rem',lineHeight:1.3}}>{a.propertyTitle}</div>
+                                      <div style={{fontSize:'.75rem',color:'var(--muted)'}}>{a.location}</div>
                                     </div>
                                   </div>
                                 </td>
@@ -1709,12 +1523,6 @@ export default function AgentDashboard() {
 
         {section === "reviews" && (
           <>
-            <section className="agent-hero">
-              <div>
-                <h1>Property Reviews</h1>
-              </div>
-            </section>
-
             <section className="agent-stats-grid reviews-stats-grid">
               <article className="agent-stat-card">
                 <div className="agent-stat-top"><span>Total Reviews</span><i className="bi bi-chat-left-text"></i></div>
@@ -1833,16 +1641,11 @@ export default function AgentDashboard() {
 
         {section === "trips" && (
           <>
-            <section className="agent-hero rowed">
-              <div>
-                <h1>Tours</h1>
-              </div>
-              <button className="btn btn-dark" onClick={() => setShowAddTrip(true)}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',margin:'0 0 10px'}}>
+              <button className="btn btn-dark" onClick={() => navigate("/agent/schedule-trip")}>
                 <i className="bi bi-plus-lg me-1"></i>Schedule Trip
               </button>
-            </section>
-
-            {tripModal}
+            </div>
 
             <section className="agent-panel">
               {mineTrips.length ? (
@@ -1985,78 +1788,126 @@ export default function AgentDashboard() {
 
         {section === "meets" && (
           <>
-            <section className="agent-hero">
-              <div>
-                <h1>Office Meetings</h1>
-              </div>
-            </section>
-
-            <section className="agent-panel">
-              {mineMeets.length ? (
-                <div className="table-responsive">
-                  <table className="table align-middle">
-                    <thead>
-                      <tr><th>Customer</th><th>Date/Time</th><th>Mode</th><th>Reason</th><th>Status</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                      {sortedMeets.map((m) => {
-                        const st = normalizeWorkflowStatus(m.status, "office_meeting");
-                        const isMine = m.assignedAgent === user.username;
-                        return (
-                          <tr key={m.id}>
-                            <td>
-                              <div className="fw-bold">{m.fullName || m.customer || m.requestedBy || "-"}</div>
-                              <div className="small muted">{m.email || "-"}</div>
-                              <div className="small muted">@{m.customer || m.requestedBy || "-"}</div>
-                            </td>
-                            <td>{formatDateTimeLabel(m.date, m.time)}</td>
-                            <td>{m.mode === "virtual" ? "Virtual" : "In Office"}</td>
-                            <td className="small">{m.reason || "-"}</td>
-                            <td><span className={statusBadgeClass(st, "office_meeting")}>{formatWorkflowStatus(st, "office_meeting")}</span></td>
-                            <td className="text-end">
-                              {st === "pending" && (
-                                <div className="d-flex justify-content-end gap-2">
-                                  <button
-                                    className="btn btn-outline-success btn-sm"
-                                    onClick={() => updateMeetStatus(m.id, "confirmed")}
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    className="btn btn-outline-danger btn-sm"
-                                    onClick={() => updateMeetStatus(m.id, "declined")}
-                                  >
-                                    Decline
-                                  </button>
-                                </div>
-                              )}
-                              {(st === "confirmed" || st === "rescheduled") && isMine && (
-                                <button
-                                  className="btn btn-outline-success btn-sm"
-                                  onClick={() => updateMeetStatus(m.id, "completed")}
-                                >
-                                  Mark Completed
-                                </button>
-                              )}
-                              {(st === "declined" || st === "completed" || st === "cancelled" || st === "no_show" || st === "expired") && (
-                                <button
-                                  className="btn btn-outline-secondary btn-sm"
-                                  disabled
-                                >
-                                  Closed
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+            <section className="agent-panel meets-panel-inner">
+              <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid var(--line-soft)" }}>
+                <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+                  <i className="bi bi-search" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", fontSize: "0.85rem", pointerEvents: "none" }} />
+                  <input
+                    type="search"
+                    className="form-control"
+                    placeholder="Search customer, reason, mode…"
+                    value={meetQuery}
+                    onChange={(e) => { setMeetQuery(e.target.value); setMeetPage(1); }}
+                    style={{ paddingLeft: 36, borderRadius: 8, fontSize: "0.875rem" }}
+                  />
                 </div>
+                <span style={{ color: "var(--muted)", fontSize: "0.80rem", whiteSpace: "nowrap" }}>
+                  {filteredMeets.length} {filteredMeets.length === 1 ? "result" : "results"}
+                </span>
+              </div>
+
+              {filteredMeets.length ? (
+                <>
+                  <div className="meets-scroll-body">
+                    <div className="table-responsive">
+                      <table className="table align-middle">
+                        <thead>
+                          <tr><th>Customer</th><th>Date/Time</th><th>Mode</th><th>Reason</th><th>Status</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                          {pagedMeets.map((m) => {
+                            const st = normalizeWorkflowStatus(m.status, "office_meeting");
+                            const isMine = m.assignedAgent === user.username;
+                            return (
+                              <tr key={m.id}>
+                                <td>
+                                  <div className="fw-bold">{m.fullName || m.customer || m.requestedBy || "-"}</div>
+                                  <div className="small muted">{m.email || "-"}</div>
+                                  <div className="small muted">@{m.customer || m.requestedBy || "-"}</div>
+                                </td>
+                                <td>{formatDateTimeLabel(m.date, m.time)}</td>
+                                <td>{m.mode === "virtual" ? "Virtual" : "In Office"}</td>
+                                <td className="small">{m.reason || "-"}</td>
+                                <td><span className={statusBadgeClass(st, "office_meeting")}>{formatWorkflowStatus(st, "office_meeting")}</span></td>
+                                <td className="text-end">
+                                  {st === "pending" && (
+                                    <div className="d-flex justify-content-end gap-2">
+                                      <button
+                                        className="btn btn-outline-success btn-sm"
+                                        onClick={() => updateMeetStatus(m.id, "confirmed")}
+                                      >
+                                        Confirm
+                                      </button>
+                                      <button
+                                        className="btn btn-outline-danger btn-sm"
+                                        onClick={() => updateMeetStatus(m.id, "declined")}
+                                      >
+                                        Decline
+                                      </button>
+                                    </div>
+                                  )}
+                                  {(st === "confirmed" || st === "rescheduled") && isMine && (
+                                    <button
+                                      className="btn btn-outline-success btn-sm"
+                                      onClick={() => updateMeetStatus(m.id, "completed")}
+                                    >
+                                      Mark Completed
+                                    </button>
+                                  )}
+                                  {(st === "declined" || st === "completed" || st === "cancelled" || st === "no_show" || st === "expired") && (
+                                    <button
+                                      className="btn btn-outline-secondary btn-sm"
+                                      disabled
+                                    >
+                                      Closed
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {meetTotalPages > 1 && (
+                    <div className="meets-panel-footer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: "0.80rem", color: "var(--muted)" }}>
+                        Page {meetPage} of {meetTotalPages} &middot; {filteredMeets.length} total
+                      </span>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button
+                          className="btn btn-outline-dark btn-sm"
+                          disabled={meetPage <= 1}
+                          onClick={() => setMeetPage((p) => p - 1)}
+                        >
+                          <i className="bi bi-chevron-left"></i>
+                        </button>
+                        {Array.from({ length: meetTotalPages }, (_, i) => i + 1).map((page) => (
+                          <button
+                            key={page}
+                            className={`btn btn-sm ${meetPage === page ? "btn-dark" : "btn-outline-dark"}`}
+                            onClick={() => setMeetPage(page)}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                        <button
+                          className="btn btn-outline-dark btn-sm"
+                          disabled={meetPage >= meetTotalPages}
+                          onClick={() => setMeetPage((p) => p + 1)}
+                        >
+                          <i className="bi bi-chevron-right"></i>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="agent-empty large">
                   <i className="bi bi-building"></i>
-                  <p>No office meet requests to handle.</p>
+                  <p>{meetQuery.trim() ? "No matches found." : "No office meet requests to handle."}</p>
                 </div>
               )}
             </section>

@@ -17,6 +17,29 @@ const MAX_CACHED_THREAD_MESSAGES = 200;
 const THREAD_BOTTOM_THRESHOLD_PX = 72;
 const THREAD_TIME_DIVIDER_GAP_MS = 1000 * 60 * 45;
 
+const parseMessageTimestamp = (value) => {
+  const timestamp = Date.parse(value || "");
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+const isSameCalendarDay = (leftValue, rightValue) => {
+  const left = leftValue instanceof Date ? leftValue : new Date(leftValue || "");
+  const right = rightValue instanceof Date ? rightValue : new Date(rightValue || "");
+  if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) return false;
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate();
+};
+
+const sortMessagesChronologically = (items) =>
+  [...items].sort((a, b) => {
+    const timeA = parseMessageTimestamp(a?.createdAt);
+    const timeB = parseMessageTimestamp(b?.createdAt);
+    if (timeA !== null && timeB !== null && timeA !== timeB) return timeA - timeB;
+    if ((timeA !== null) !== (timeB !== null)) return timeA !== null ? -1 : 1;
+    return String(a?.id || "").localeCompare(String(b?.id || ""));
+  });
+
 const buildMessagingCacheKey = (userLike) => {
   const username = String(userLike?.username || "").trim();
   const role = String(userLike?.role || "").trim().toLowerCase();
@@ -38,7 +61,7 @@ const readMessagingCache = (cacheKey) => {
     const threads = Object.fromEntries(
       Object.entries(rawThreads).map(([key, value]) => [
         String(key || "").trim(),
-        Array.isArray(value) ? value.slice(-MAX_CACHED_THREAD_MESSAGES) : []
+        Array.isArray(value) ? sortMessagesChronologically(value).slice(-MAX_CACHED_THREAD_MESSAGES) : []
       ]).filter(([key]) => Boolean(key))
     );
     return { contacts, selectedContact, threads };
@@ -76,13 +99,22 @@ const formatMessageTime = (value) => {
   });
 };
 
-const formatThreadDividerTime = (value) => {
+const formatThreadDividerLabel = (value, previousValue) => {
   const date = new Date(value || "");
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString(undefined, {
-    hour: "numeric",
-    minute: "2-digit"
-  });
+  const previousDate = new Date(previousValue || "");
+  const showDate = Number.isNaN(previousDate.getTime()) || !isSameCalendarDay(date, previousDate);
+  return date.toLocaleString(undefined, showDate
+    ? {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      }
+    : {
+        hour: "numeric",
+        minute: "2-digit"
+      });
 };
 
 const formatStatusLabel = (value, fallback = "") => {
@@ -118,6 +150,20 @@ const contactLabel = (contact) => {
   return contact.fullName || `@${contact.username}`;
 };
 
+const avatarColorClass = (contact) => {
+  const role = String(contact?.role || "").toLowerCase();
+  if (role === "admin") return "avatar-role-admin";
+  if (role === "agent") return "avatar-role-agent";
+  return "avatar-role-customer";
+};
+
+const roleBadgeClass = (role) => {
+  const r = String(role || "").toLowerCase();
+  if (r === "admin") return "messaging-role-badge role-admin";
+  if (r === "agent") return "messaging-role-badge role-agent";
+  return "messaging-role-badge role-customer";
+};
+
 const contactPreview = (contact) => {
   if (contact?.lastMessage) return contact.lastMessage;
   return `${contact?.role || "user"} | ${contact?.smsPhone || contact?.phone || "No phone on file"}`;
@@ -137,13 +183,7 @@ const mergeMessageList = (items, incoming) => {
   } else {
     next.push(incoming);
   }
-  next.sort((a, b) => {
-    const timeA = Date.parse(a?.createdAt || "");
-    const timeB = Date.parse(b?.createdAt || "");
-    if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) return timeA - timeB;
-    return String(a?.id || "").localeCompare(String(b?.id || ""));
-  });
-  return next;
+  return sortMessagesChronologically(next);
 };
 
 const mergeContactSummary = (items, summary) => {
@@ -186,10 +226,11 @@ const resolveSelectedContact = (items, preferredContact = "") => {
 };
 
 const shouldShowThreadDivider = (currentMessage, previousMessage) => {
-  const currentTimestamp = Date.parse(currentMessage?.createdAt || "");
-  if (!Number.isFinite(currentTimestamp)) return false;
-  const previousTimestamp = Date.parse(previousMessage?.createdAt || "");
-  if (!Number.isFinite(previousTimestamp)) return true;
+  const currentTimestamp = parseMessageTimestamp(currentMessage?.createdAt);
+  if (currentTimestamp === null) return false;
+  const previousTimestamp = parseMessageTimestamp(previousMessage?.createdAt);
+  if (previousTimestamp === null) return true;
+  if (!isSameCalendarDay(currentMessage?.createdAt, previousMessage?.createdAt)) return true;
   return (currentTimestamp - previousTimestamp) >= THREAD_TIME_DIVIDER_GAP_MS;
 };
 
@@ -246,7 +287,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
     persistMessagingCache({ selectedContact });
     if (selectedContact) {
       const cachedMessages = threadCacheRef.current[selectedContact];
-      setMessages(Array.isArray(cachedMessages) ? cachedMessages : []);
+      setMessages(Array.isArray(cachedMessages) ? sortMessagesChronologically(cachedMessages) : []);
     } else {
       setMessages([]);
     }
@@ -289,7 +330,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
     selectedContactRef.current = nextSelectedContact;
     setContacts(cachedContacts);
     setSelectedContact(nextSelectedContact);
-    setMessages(nextSelectedContact ? (threadCacheRef.current[nextSelectedContact] || []) : []);
+    setMessages(nextSelectedContact ? sortMessagesChronologically(threadCacheRef.current[nextSelectedContact] || []) : []);
     setDraft("");
     setSearch("");
   }, [cacheKey]);
@@ -317,13 +358,14 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
       ? messagesRef.current
       : (threadCacheRef.current[normalizedContactKey] || []);
     const nextMessages = typeof producer === "function" ? producer(baseMessages) : producer;
+    const normalizedMessages = Array.isArray(nextMessages) ? sortMessagesChronologically(nextMessages) : [];
     threadCacheRef.current = {
       ...threadCacheRef.current,
-      [normalizedContactKey]: Array.isArray(nextMessages) ? nextMessages.slice(-MAX_CACHED_THREAD_MESSAGES) : []
+      [normalizedContactKey]: normalizedMessages.slice(-MAX_CACHED_THREAD_MESSAGES)
     };
     persistMessagingCache({ threads: threadCacheRef.current });
     if (normalizedContactKey === selectedContactRef.current) {
-      setMessages(Array.isArray(nextMessages) ? nextMessages : []);
+      setMessages(normalizedMessages);
     }
   };
 
@@ -376,10 +418,10 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
     let cancelled = false;
     let intervalId = null;
     forceScrollRef.current = true;
-    const pollIntervalMs = isStreamConnected ? STREAM_CONNECTED_POLL_INTERVAL_MS : FALLBACK_POLL_INTERVAL_MS;
+    const pollIntervalMs = streamConnectedRef.current ? STREAM_CONNECTED_POLL_INTERVAL_MS : FALLBACK_POLL_INTERVAL_MS;
     const cachedMessages = threadCacheRef.current[selectedContact];
     if (Array.isArray(cachedMessages) && cachedMessages.length) {
-      setMessages(cachedMessages);
+      setMessages(sortMessagesChronologically(cachedMessages));
     }
 
     const loadMessages = async (showLoading = true) => {
@@ -387,7 +429,8 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
       try {
         const res = await apiRequest(`/api/messages?contact=${encodeURIComponent(selectedContact)}&limit=200`, { method: "GET" });
         if (cancelled) return;
-        const nextMessages = Array.isArray(res?.data) ? res.data : [];
+        if (selectedContactRef.current !== selectedContact) return;
+        const nextMessages = sortMessagesChronologically(Array.isArray(res?.data) ? res.data : []);
         threadCacheRef.current = {
           ...threadCacheRef.current,
           [selectedContact]: nextMessages.slice(-MAX_CACHED_THREAD_MESSAGES)
@@ -427,7 +470,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
-  }, [selectedContact, feedback, isStreamConnected]);
+  }, [selectedContact, feedback]);
 
   useEffect(() => {
     if (!resolvedCurrentUser?.username || !resolvedCurrentUser?.role) return undefined;
@@ -675,12 +718,12 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
               className={`messaging-contact-item ${activeContact?.username === contact.username ? "active" : ""}`}
               onClick={() => setSelectedContact(contact.username || contact.id)}
             >
-              <div className="messaging-contact-avatar">{initialsFrom(contactLabel(contact))}</div>
+              <div className={`messaging-contact-avatar ${avatarColorClass(contact)}`}>{initialsFrom(contactLabel(contact))}</div>
               <div className="messaging-contact-main">
                 <div className="messaging-contact-row">
                   <div className="messaging-contact-name">{contactLabel(contact)}</div>
                   <div className="messaging-contact-time">
-                    {contact.lastMessageAt ? formatMessageTime(contact.lastMessageAt) : formatStatusLabel(contact.role)}
+                    {contact.lastMessageAt ? formatMessageTime(contact.lastMessageAt) : <span className={roleBadgeClass(contact.role)}>{formatStatusLabel(contact.role)}</span>}
                   </div>
                 </div>
                 <div className="messaging-contact-meta">
@@ -699,12 +742,12 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
       <div className="messaging-thread-panel">
         <div className="messaging-thread-topbar">
           <div className="messaging-thread-profile">
-            <div className="messaging-thread-avatar">{activeAvatarLabel}</div>
+            <div className={`messaging-thread-avatar ${activeContact ? avatarColorClass(activeContact) : ''}`}>{activeAvatarLabel}</div>
             <div>
               <strong>{activeContact ? contactLabel(activeContact) : "Start a conversation"}</strong>
               <div className="small muted">
                 {activeContact
-                  ? `${formatStatusLabel(activeContact.role)} | ${activeContact.smsPhone || activeContact.phone || "No phone number on file"}`
+                  ? <><span className={roleBadgeClass(activeContact.role)}>{formatStatusLabel(activeContact.role)}</span> <span style={{margin:'0 2px'}}>|</span> {activeContact.smsPhone || activeContact.phone || "No phone number on file"}</>
                   : "Choose a contact to open a conversation."}
               </div>
             </div>
@@ -734,7 +777,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
               <React.Fragment key={message.id}>
                 {showThreadDivider ? (
                   <div className="message-time-divider">
-                    <span>{formatThreadDividerTime(message.createdAt)}</span>
+                    <span>{formatThreadDividerLabel(message.createdAt, previousMessage?.createdAt)}</span>
                   </div>
                 ) : null}
                 <div
@@ -742,7 +785,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
                 >
                   {!message.isOwn ? (
                     showIncomingAvatar ? (
-                      <div className="message-avatar">
+                      <div className={`message-avatar ${activeContact ? avatarColorClass(activeContact) : ''}`}>
                         {initialsFrom(message.sender?.fullName || message.sender?.username)}
                       </div>
                     ) : (

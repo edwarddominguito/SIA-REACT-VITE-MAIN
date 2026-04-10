@@ -462,7 +462,7 @@ export default function DashboardLayout({
   });
   const primaryHeroChild = primaryHeroIndex >= 0 ? childItems[primaryHeroIndex] : null;
   const hasPrimaryPageHero = Boolean(primaryHeroChild);
-  const useDesktopShellHeader = hasPrimaryPageHero && isDesktopViewport;
+  const useDesktopShellHeader = isDesktopViewport;
   const logoutConfirmModal =
     typeof document === "undefined"
       ? null
@@ -518,21 +518,16 @@ export default function DashboardLayout({
         >
           <i className={`bi ${isSidebarCollapsed ? "bi-layout-sidebar-inset-reverse" : "bi-layout-sidebar-inset"}`}></i>
         </button>
-        <div className="dashboard-page-heading-copy">{primaryHeroChild?.props?.children}</div>
+        {hasPrimaryPageHero
+          ? <div className="dashboard-page-heading-copy">{primaryHeroChild?.props?.children}</div>
+          : <span style={{fontWeight:700,fontSize:'1.15rem',letterSpacing:'-0.01em',color:'var(--dash-text)'}}>{navItems?.find((item) => item.id === activeTab)?.label || suiteLabel || ""}</span>
+        }
       </div>
       {headerActions}
     </div>
   );
   const renderedChildren = hasPrimaryPageHero
-    ? useDesktopShellHeader
-      ? childItems.filter((_, index) => index !== primaryHeroIndex)
-      : childItems.map((child, index) => (
-          index === primaryHeroIndex && React.isValidElement(child)
-            ? React.cloneElement(child, {
-                children: headerMarkup
-              })
-            : child
-        ))
+    ? childItems.filter((_, index) => index !== primaryHeroIndex)
     : childItems;
 
   return (

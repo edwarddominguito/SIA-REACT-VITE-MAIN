@@ -551,12 +551,20 @@ body.dashboard-v2-portal-theme .ui-toast-text {
   color: var(--dash-muted);
 }
 
-.dashboard-v2 .btn,
-.dashboard-v2 .btn.btn-sm {
-  min-height: 44px;
-  border-radius: 12px;
+.dashboard-v2 .btn {
+  min-height: 32px;
+  border-radius: 8px;
   font-weight: 600;
+  font-size: .82rem;
+  padding: .25rem .7rem;
   box-shadow: none !important;
+}
+
+.dashboard-v2 .btn.btn-sm {
+  min-height: 24px;
+  border-radius: 6px;
+  font-size: .75rem;
+  padding: .15rem .5rem;
 }
 
 .dashboard-v2 .btn-dark,
@@ -569,30 +577,57 @@ body.dashboard-v2-portal-theme .ui-toast-text {
 .dashboard-v2 .btn-outline-dark,
 .dashboard-v2 .btn.btn-outline-dark,
 .dashboard-v2 .btn-outline-secondary,
-.dashboard-v2 .btn.btn-outline-secondary,
-.dashboard-v2 .btn-outline-primary,
-.dashboard-v2 .btn.btn-outline-primary,
-.dashboard-v2 .btn-outline-danger,
-.dashboard-v2 .btn.btn-outline-danger,
-.dashboard-v2 .btn-outline-success,
-.dashboard-v2 .btn.btn-outline-success {
+.dashboard-v2 .btn.btn-outline-secondary {
   border-color: var(--dash-border-strong) !important;
   background: #ffffff !important;
   color: var(--dash-copy-strong) !important;
 }
 
+.dashboard-v2 .btn-outline-success,
+.dashboard-v2 .btn.btn-outline-success {
+  border-color: #16a34a !important;
+  background: #f0fdf4 !important;
+  color: #15803d !important;
+}
+
+.dashboard-v2 .btn-outline-primary,
+.dashboard-v2 .btn.btn-outline-primary {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+.dashboard-v2 .btn-outline-danger,
+.dashboard-v2 .btn.btn-outline-danger {
+  border-color: #dc2626 !important;
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+}
+
 .dashboard-v2 .btn-outline-dark:hover,
 .dashboard-v2 .btn.btn-outline-dark:hover,
 .dashboard-v2 .btn-outline-secondary:hover,
-.dashboard-v2 .btn.btn-outline-secondary:hover,
-.dashboard-v2 .btn-outline-primary:hover,
-.dashboard-v2 .btn.btn-outline-primary:hover,
-.dashboard-v2 .btn-outline-danger:hover,
-.dashboard-v2 .btn.btn-outline-danger:hover,
-.dashboard-v2 .btn-outline-success:hover,
-.dashboard-v2 .btn.btn-outline-success:hover {
+.dashboard-v2 .btn.btn-outline-secondary:hover {
   background: var(--dash-surface-muted) !important;
   border-color: #a1a1aa !important;
+}
+
+.dashboard-v2 .btn-outline-success:hover,
+.dashboard-v2 .btn.btn-outline-success:hover {
+  background: #dcfce7 !important;
+  border-color: #15803d !important;
+}
+
+.dashboard-v2 .btn-outline-primary:hover,
+.dashboard-v2 .btn.btn-outline-primary:hover {
+  background: #dbeafe !important;
+  border-color: #1d4ed8 !important;
+}
+
+.dashboard-v2 .btn-outline-danger:hover,
+.dashboard-v2 .btn.btn-outline-danger:hover {
+  background: #fee2e2 !important;
+  border-color: #b91c1c !important;
 }
 
 .dashboard-v2 .form-control,
@@ -645,12 +680,89 @@ body.dashboard-v2-portal-theme .ui-toast-text {
   background: #fafafa;
 }
 
-.dashboard-v2 .badge-soft,
-.dashboard-v2 .badge-soft[class*="status-"],
-.dashboard-v2 [class*="status-chip"] {
-  border: 1px solid var(--dash-border-strong) !important;
+.dashboard-v2 .badge-soft {
+  border: 1px solid var(--dash-border-strong);
+  background: #f4f4f5;
+  color: var(--dash-copy-muted);
+}
+
+.dashboard-v2 .badge-soft.status-confirmed,
+.dashboard-v2 .badge-soft.status-approved {
+  background: rgba(16,185,129,.1) !important;
+  border-color: rgba(16,185,129,.22) !important;
+  color: #047857 !important;
+}
+
+.dashboard-v2 .badge-soft.status-pending,
+.dashboard-v2 .badge-soft.status-scheduled {
+  background: rgba(245,158,11,.1) !important;
+  border-color: rgba(245,158,11,.22) !important;
+  color: #b45309 !important;
+}
+
+.dashboard-v2 .badge-soft.status-cancelled,
+.dashboard-v2 .badge-soft.status-rejected,
+.dashboard-v2 .badge-soft.status-declined {
+  background: rgba(239,68,68,.1) !important;
+  border-color: rgba(239,68,68,.2) !important;
+  color: #b91c1c !important;
+}
+
+.dashboard-v2 .badge-soft.status-completed,
+.dashboard-v2 .badge-soft.status-done {
+  background: rgba(59,130,246,.1) !important;
+  border-color: rgba(59,130,246,.2) !important;
+  color: #1d4ed8 !important;
+}
+
+.dashboard-v2 .badge-soft.status-rescheduled {
+  background: rgba(139,92,246,.1) !important;
+  border-color: rgba(139,92,246,.22) !important;
+  color: #6d28d9 !important;
+}
+
+.dashboard-v2 .badge-soft.status-no_show,
+.dashboard-v2 .badge-soft.status-expired {
+  background: rgba(107,114,128,.1) !important;
+  border-color: rgba(107,114,128,.2) !important;
+  color: #4b5563 !important;
+}
+
+.dashboard-v2 .badge-soft.status-available {
+  background: rgba(16,185,129,.1) !important;
+  border-color: rgba(16,185,129,.22) !important;
+  color: #047857 !important;
+}
+
+.dashboard-v2 .badge-soft.status-reserved,
+.dashboard-v2 .badge-soft.status-rented {
+  background: rgba(245,158,11,.1) !important;
+  border-color: rgba(245,158,11,.22) !important;
+  color: #b45309 !important;
+}
+
+.dashboard-v2 .badge-soft.status-unavailable,
+.dashboard-v2 .badge-soft.status-inactive,
+.dashboard-v2 .badge-soft.status-archived {
+  background: rgba(239,68,68,.1) !important;
+  border-color: rgba(239,68,68,.2) !important;
+  color: #b91c1c !important;
+}
+
+.dashboard-v2 .btn:disabled,
+.dashboard-v2 .btn[disabled] {
   background: #f4f4f5 !important;
-  color: var(--dash-copy-muted) !important;
+  border-color: #e4e4e7 !important;
+  color: #a1a1aa !important;
+  opacity: 1 !important;
+  cursor: default;
+}
+
+.dashboard-v2 .btn-outline-secondary,
+.dashboard-v2 .btn.btn-outline-secondary {
+  border-color: var(--dash-border-strong) !important;
+  background: #ffffff !important;
+  color: var(--dash-copy-strong) !important;
 }
 
 .dashboard-v2 .messaging-shell {
@@ -700,6 +812,10 @@ body.dashboard-v2-portal-theme .ui-toast-text {
 .dashboard-v2 .messaging-contact-avatar,
 .dashboard-v2 .messaging-thread-avatar,
 .dashboard-v2 .message-avatar {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  flex: 0 0 38px !important;
   background: #18181b;
   color: var(--dash-copy-inverse);
   box-shadow: none;
@@ -744,9 +860,9 @@ body.dashboard-v2-portal-theme .ui-toast-text {
 }
 
 .dashboard-v2 .messaging-send-btn {
-  border: 1px solid #18181b;
-  background: #18181b;
-  color: var(--dash-copy-inverse);
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
   box-shadow: none;
 }
 
@@ -756,11 +872,143 @@ body.dashboard-v2-portal-theme .ui-toast-text {
   color: var(--dash-copy-soft);
 }
 
+/* ─── Colorful messaging avatars ─── */
+.dashboard-v2 .messaging-contact-avatar.avatar-role-customer,
+.dashboard-v2 .messaging-thread-avatar.avatar-role-customer,
+.dashboard-v2 .message-avatar.avatar-role-customer {
+  background: #2563eb !important;
+  color: #fff !important;
+}
+
+.dashboard-v2 .messaging-contact-avatar.avatar-role-agent,
+.dashboard-v2 .messaging-thread-avatar.avatar-role-agent,
+.dashboard-v2 .message-avatar.avatar-role-agent {
+  background: #059669 !important;
+  color: #fff !important;
+}
+
+.dashboard-v2 .messaging-contact-avatar.avatar-role-admin,
+.dashboard-v2 .messaging-thread-avatar.avatar-role-admin,
+.dashboard-v2 .message-avatar.avatar-role-admin {
+  background: #7c3aed !important;
+  color: #fff !important;
+}
+
+/* ─── Role badges in messaging ─── */
+.messaging-role-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.messaging-role-badge.role-customer {
+  background: #f4f4f5;
+  color: #52525b;
+  border: 1px solid #e4e4e7;
+}
+
+.messaging-role-badge.role-agent {
+  background: #f4f4f5;
+  color: #52525b;
+  border: 1px solid #e4e4e7;
+}
+
+.messaging-role-badge.role-admin {
+  background: #f4f4f5;
+  color: #52525b;
+  border: 1px solid #e4e4e7;
+}
+
+/* ─── Colorful own bubbles – use a richer tone ─── */
+.dashboard-v2 .message-bubble.own {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #fff !important;
+}
+
+.dashboard-v2 .message-bubble.own .message-bubble-meta {
+  color: rgba(255,255,255,.65) !important;
+}
+
+/* active contact highlight matches avatar color */
+.dashboard-v2 .messaging-contact-item.active {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+}
+
 .dashboard-v2 .messaging-jump-pill {
   border: 1px solid #18181b;
   background: #18181b;
   color: var(--dash-copy-inverse);
   box-shadow: none;
+}
+
+/* ─── Colorful calendar header elements ─── */
+.dashboard-v2 .dashboard-calendar-head-badge {
+  background: #dbeafe !important;
+  color: #2563eb !important;
+}
+
+.dashboard-v2 .dashboard-calendar-head-pill.emphasis {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #fff !important;
+}
+
+.dashboard-v2 .dashboard-calendar-date-card {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+.dashboard-v2 .dashboard-calendar-date-card span {
+  color: #2563eb !important;
+}
+.dashboard-v2 .dashboard-calendar-date-card strong {
+  color: #1e40af !important;
+}
+
+.dashboard-v2 .dashboard-calendar-metric.type-all {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+.dashboard-v2 .dashboard-calendar-metric.type-all small { color: #6b7280; }
+.dashboard-v2 .dashboard-calendar-metric.type-all strong { color: #111827; }
+
+.dashboard-v2 .dashboard-calendar-metric.type-appointment {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.dashboard-v2 .dashboard-calendar-metric.type-appointment small { color: #3b82f6; }
+.dashboard-v2 .dashboard-calendar-metric.type-appointment strong { color: #1e40af; }
+
+.dashboard-v2 .dashboard-calendar-metric.type-meet {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+.dashboard-v2 .dashboard-calendar-metric.type-meet small { color: #8b5cf6; }
+.dashboard-v2 .dashboard-calendar-metric.type-meet strong { color: #5b21b6; }
+
+.dashboard-v2 .dashboard-calendar-metric.type-trip {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.dashboard-v2 .dashboard-calendar-metric.type-trip small { color: #10b981; }
+.dashboard-v2 .dashboard-calendar-metric.type-trip strong { color: #065f46; }
+
+.dashboard-v2 .dashboard-calendar-metric.type-event {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.dashboard-v2 .dashboard-calendar-metric.type-event small { color: #f59e0b; }
+.dashboard-v2 .dashboard-calendar-metric.type-event strong { color: #92400e; }
+
+.dashboard-v2 .dashboard-calendar-cell.today .dashboard-calendar-day {
+  background: #2563eb !important;
+  color: #fff !important;
 }
 
 .dashboard-v2 .dashboard-calendar-head-copy h3,
@@ -822,7 +1070,7 @@ body.dashboard-v2-portal-theme .ui-toast-text {
 }
 
 .dashboard-v2 .dashboard-calendar-cell.today .dashboard-calendar-day {
-  background: #1f2937;
+  background: #2563eb;
   color: #ffffff;
 }
 
@@ -849,21 +1097,72 @@ body.dashboard-v2-portal-theme .ui-toast-text {
 }
 
 
-.dashboard-v2 .dashboard-calendar-chip.type-appointment,
-.dashboard-v2 .dashboard-calendar-chip.type-meet,
-.dashboard-v2 .dashboard-calendar-chip.type-trip,
-.dashboard-v2 .dashboard-calendar-chip.type-event {
-  border-left-color: var(--dash-border-strong);
+.dashboard-v2 .dashboard-calendar-chip.type-appointment {
+  border-left: 3px solid #2563eb;
+  background: #eff6ff;
+  color: #1e40af;
+}
+.dashboard-v2 .dashboard-calendar-chip.type-appointment small {
+  color: #3b82f6;
 }
 
-.dashboard-v2 .dashboard-calendar-upcoming-item.type-appointment,
-.dashboard-v2 .dashboard-calendar-upcoming-item.type-meet,
-.dashboard-v2 .dashboard-calendar-upcoming-item.type-trip,
+.dashboard-v2 .dashboard-calendar-chip.type-meet {
+  border-left: 3px solid #7c3aed;
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+.dashboard-v2 .dashboard-calendar-chip.type-meet small {
+  color: #8b5cf6;
+}
+
+.dashboard-v2 .dashboard-calendar-chip.type-trip {
+  border-left: 3px solid #059669;
+  background: #ecfdf5;
+  color: #065f46;
+}
+.dashboard-v2 .dashboard-calendar-chip.type-trip small {
+  color: #10b981;
+}
+
+.dashboard-v2 .dashboard-calendar-chip.type-event {
+  border-left: 3px solid #d97706;
+  background: #fffbeb;
+  color: #92400e;
+}
+.dashboard-v2 .dashboard-calendar-chip.type-event small {
+  color: #f59e0b;
+}
+
+.dashboard-v2 .dashboard-calendar-upcoming-item.type-appointment {
+  border-left: 3px solid #2563eb;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  border-left: 3px solid #2563eb;
+}
+
+.dashboard-v2 .dashboard-calendar-upcoming-item.type-meet {
+  border-left: 3px solid #7c3aed;
+  background: #f5f3ff;
+  color: #5b21b6;
+  border: 1px solid #ddd6fe;
+  border-left: 3px solid #7c3aed;
+}
+
+.dashboard-v2 .dashboard-calendar-upcoming-item.type-trip {
+  border-left: 3px solid #059669;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  border-left: 3px solid #059669;
+}
+
 .dashboard-v2 .dashboard-calendar-upcoming-item.type-event {
-  border-left-color: var(--dash-border-strong);
-  background: #ffffff;
-  color: var(--dash-copy-strong);
-  border: 1px solid var(--dash-border);
+  border-left: 3px solid #d97706;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-left: 3px solid #d97706;
 }
 
 .dashboard-v2 .dashboard-calendar-chip.active,
@@ -880,21 +1179,42 @@ body.dashboard-v2-portal-theme .ui-toast-text {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.dashboard-v2 .dashboard-calendar-detail-icon.type-appointment,
-.dashboard-v2 .dashboard-calendar-detail-icon.type-meet,
-.dashboard-v2 .dashboard-calendar-detail-icon.type-trip,
+.dashboard-v2 .dashboard-calendar-detail-icon.type-appointment {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.dashboard-v2 .dashboard-calendar-detail-icon.type-meet {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+.dashboard-v2 .dashboard-calendar-detail-icon.type-trip {
+  background: #d1fae5;
+  color: #059669;
+}
 .dashboard-v2 .dashboard-calendar-detail-icon.type-event {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.dashboard-v2 .dashboard-calendar-upcoming-item .dashboard-calendar-upcoming-icon {
   background: #e5e7eb;
   color: #111827;
 }
-
-.dashboard-v2 .dashboard-calendar-upcoming-item .dashboard-calendar-upcoming-icon,
-.dashboard-v2 .dashboard-calendar-upcoming-row.type-appointment .dashboard-calendar-upcoming-row-icon,
-.dashboard-v2 .dashboard-calendar-upcoming-row.type-meet .dashboard-calendar-upcoming-row-icon,
-.dashboard-v2 .dashboard-calendar-upcoming-row.type-trip .dashboard-calendar-upcoming-row-icon,
+.dashboard-v2 .dashboard-calendar-upcoming-row.type-appointment .dashboard-calendar-upcoming-row-icon {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.dashboard-v2 .dashboard-calendar-upcoming-row.type-meet .dashboard-calendar-upcoming-row-icon {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+.dashboard-v2 .dashboard-calendar-upcoming-row.type-trip .dashboard-calendar-upcoming-row-icon {
+  background: #d1fae5;
+  color: #059669;
+}
 .dashboard-v2 .dashboard-calendar-upcoming-row.type-event .dashboard-calendar-upcoming-row-icon {
-  background: #e5e7eb;
-  color: #111827;
+  background: #fef3c7;
+  color: #d97706;
 }
 
 .dashboard-v2 .dashboard-calendar-upcoming-row.active .dashboard-calendar-upcoming-row-icon {
@@ -962,9 +1282,7 @@ body.dashboard-v2-portal-theme .ui-toast-text {
 .dashboard-v2 .dashboard-page .muted,
 .dashboard-v2 .dashboard-page .text-muted,
 .dashboard-v2 .dashboard-page .table thead th,
-.dashboard-v2 .dashboard-page .input-group-text,
-.dashboard-v2 .dashboard-page .badge,
-.dashboard-v2 .dashboard-page .badge-soft {
+.dashboard-v2 .dashboard-page .input-group-text {
   color: var(--dash-copy-muted) !important;
 }
 
