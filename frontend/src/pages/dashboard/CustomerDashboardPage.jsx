@@ -12,10 +12,12 @@ import { CUSTOMER_NAV_ITEMS } from "@/data/constants.js";
 import { appointmentStatusPriority } from "@/utils/workflow.js";
 import {
   applyPropertyImageFallback,
+  appointmentTypeLabel,
   eventDateTimeStamp,
   formatClockTime,
   formatDateTimeLabel,
   formatWorkflowStatus,
+  isDisplayableProperty,
   isActiveStatus,
   listingTypeLabel,
   makePropertyFallbackImage,
@@ -23,6 +25,7 @@ import {
   normalizeWorkflowStatus,
   normalizeAppointmentImages,
   propertyPriceLabel,
+  resolveAppointmentImage,
   propertyStatusLabel,
   statusBadgeClass,
   tripAttendees,
@@ -174,14 +177,14 @@ export default function CustomerDashboard() {
   const [q, setQ] = useState("");
   const [appointmentQuery, setAppointmentQuery] = useState("");
   const [appointmentStatusFilter, setAppointmentStatusFilter] = useState("all");
-  const [booking, setBooking] = useState({ propertyId: "", date: "", time: "", notes: "" });
-  const [bookingStep, setBookingStep] = useState(1);
-  const [bookingSuccess, setBookingSuccess] = useState(null);
   const [profileForm, setProfileForm] = useState({
     fullName: user?.fullName || "",
     phone: user?.phone || "",
     email: user?.email || ""
   });
+  const [booking, setBooking] = useState({ propertyId: "", date: "", time: "", appointmentType: "property_viewing", fullName: "", email: "", phone: "", notes: "" });
+  const [bookingStep, setBookingStep] = useState(1);
+  const [bookingSuccess, setBookingSuccess] = useState(null);
   const [meetForm, setMeetForm] = useState({
     fullName: user?.fullName || "",
     email: user?.email || "",
@@ -212,7 +215,7 @@ export default function CustomerDashboard() {
   const canUsePortal = typeof document !== "undefined";
 
   const refreshAll = () => {
-    const allProperties = safeArray("allProperties");
+    const allProperties = safeArray("allProperties").filter(isDisplayableProperty);
     const allAppointments = safeArray("allAppointments");
     const normalizedAppointments = normalizeAppointmentImages(allAppointments, allProperties);
     if (normalizedAppointments.changed) {
@@ -286,8 +289,9 @@ export default function CustomerDashboard() {
 
   const filteredProps = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return properties;
-    return properties.filter((p) =>
+    const visibleProperties = properties.filter(isDisplayableProperty);
+    if (!s) return visibleProperties;
+    return visibleProperties.filter((p) =>
       [p.title, p.location, p.description, p.agent, p.propertyType, p.listingType].filter(Boolean).join(" ").toLowerCase().includes(s)
     );
   }, [properties, q]);
@@ -649,7 +653,7 @@ export default function CustomerDashboard() {
   };
 
   const resetBookingFlow = () => {
-    setBooking({ propertyId: "", date: "", time: "", notes: "" });
+    setBooking({ propertyId: "", date: "", time: "", appointmentType: "property_viewing", fullName: "", email: "", phone: "", notes: "" });
     setBookingStep(1);
     setBookingSuccess(null);
   };
@@ -717,7 +721,16 @@ export default function CustomerDashboard() {
   };
 
   const startBookingForProperty = (propertyId) => {
-    setBooking({ propertyId: String(propertyId), date: "", time: "", notes: "" });
+    setBooking({
+      propertyId: String(propertyId),
+      date: "",
+      time: "",
+      appointmentType: "property_viewing",
+      fullName: profileForm.fullName || user?.fullName || "",
+      email: profileForm.email || user?.email || "",
+      phone: profileForm.phone || user?.phone || "",
+      notes: ""
+    });
     setBookingStep(1);
     setBookingSuccess(null);
   };
@@ -727,9 +740,22 @@ export default function CustomerDashboard() {
     return "";
   }
 
-  const normalizedBooking = normalizeDateTimeInput(booking.date, booking.time);
+  const { date: _normDate, time: _normTime } = normalizeDateTimeInput(booking.date, booking.time);
+  const normalizedBooking = {
+    date: _normDate,
+    time: _normTime,
+    fullName: cleanText(booking.fullName, 80),
+    email: cleanEmail(booking.email),
+    phone: cleanPhone(booking.phone),
+    notes: cleanText(booking.notes, 500)
+  };
   const bookingRequiredMessage = getBookingRequiredMessage(normalizedBooking.date, normalizedBooking.time);
   const canContinueBooking = Boolean(normalizedBooking.date && normalizedBooking.time) && !isSubmittingBooking;
+  const canAdvanceToConfirm = Boolean(
+    normalizedBooking.fullName &&
+    normalizedBooking.email && isValidEmail(normalizedBooking.email) &&
+    normalizedBooking.phone && isValidPhone(normalizedBooking.phone)
+  );
   const canConfirmBooking = !bookingRequiredMessage && !isSubmittingBooking;
 
   const handlePropertyImageError = (e, propertyLike) => {
@@ -737,19 +763,7 @@ export default function CustomerDashboard() {
   };
 
   const getPropertyImage = (item) => {
-    const explicit = String(item?.propertyImage || item?.imageUrl || "").trim();
-    if (explicit) return explicit;
-    const matched =
-      properties.find((p) => String(p.id) === String(item?.propertyId)) ||
-      properties.find((p) => p.title === item?.propertyTitle && p.location === item?.location);
-    const resolved = withImage(
-      matched || {
-        id: item?.propertyId,
-        title: item?.propertyTitle,
-        location: item?.location,
-        imageUrl: ""
-      }
-    );
+    const resolved = resolveAppointmentImage(item, properties);
     return resolved || makePropertyFallbackImage(item?.propertyTitle || "Property");
   };
 
@@ -835,10 +849,6 @@ export default function CustomerDashboard() {
                     <div className="agent-property-body">
                       <h4>{p.title}</h4>
                       <p><i className="bi bi-geo-alt"></i> {p.location}</p>
-                      <div className="public-home-property-tags">
-                        <span>{listingTypeLabel(p)}</span>
-                        {p.propertyType ? <span>{String(p.propertyType).replace(/_/g, " ")}</span> : null}
-                      </div>
                       <strong>{propertyPriceLabel(p)}</strong>
                       {facts.length ? (
                         <div className="customer-property-facts">
@@ -903,49 +913,57 @@ export default function CustomerDashboard() {
               {filteredProps.map((p) => {
                 const normalizedStatus = normalizePropertyStatus(p.propertyStatus || p.status);
                 const isAvailable = normalizedStatus === "available";
-                const facts = propertyFactItems(p);
+                const bedrooms = Number(p?.bedrooms || 0);
+                const bathrooms = Number(p?.bathrooms || 0);
+                const areaSqft = Number(p?.areaSqft || 0);
+                const areaLabel = areaSqft > 0 ? `${areaSqft.toLocaleString()} sqft` : "Area pending";
+                const detailLine = [
+                  bedrooms > 0 ? `${bedrooms} Bed` : null,
+                  bathrooms > 0 ? `${bathrooms} Bath` : null,
+                  areaSqft > 0 ? `${areaSqft.toLocaleString()} sqft` : null
+                ].filter(Boolean).join(" | ");
                 return (
                 <article key={p.id} className="agent-property-card customer-browse-card">
-                  <img
-                    src={withImage(p)}
-                    alt={p.title}
-                    className="customer-browse-card-image"
-                    onError={(e) => handlePropertyImageError(e, p)}
-                  />
+                  <div className="customer-browse-media">
+                    <img
+                      src={withImage(p)}
+                      alt={p.title}
+                      className="customer-browse-card-image"
+                      onError={(e) => handlePropertyImageError(e, p)}
+                    />
+                    <span className={`badge badge-soft customer-browse-badge status-${normalizedStatus}`}>
+                      {propertyStatusLabel(p)}
+                    </span>
+                  </div>
                   <div className="agent-property-body customer-browse-body">
-                    <div className="customer-browse-title-row">
-                      <h4 className="customer-browse-title">{p.title}</h4>
-                      <span className={`badge badge-soft customer-browse-status status-${normalizedStatus}`}>
-                        {propertyStatusLabel(p)}
-                      </span>
+                    <div className="customer-browse-summary">
+                      <h4 className="customer-browse-headline">
+                        <span className="customer-browse-title">{p.title}</span>
+                        <span className="customer-browse-dot">&bull;</span>
+                        <span className="customer-browse-area">{propertyStatusLabel(p)}</span>
+                      </h4>
+                      <strong className="customer-browse-price">{propertyPriceLabel(p)}</strong>
+                      <p className="customer-browse-detail-line">{detailLine}</p>
+                      <p className="customer-browse-location">
+                        <i className="bi bi-geo-alt"></i>
+                        <span>{p.location}</span>
+                      </p>
                     </div>
-                    <p className="customer-browse-location"><i className="bi bi-geo-alt"></i> {p.location}</p>
-                    <div className="public-home-property-tags customer-browse-tags">
-                      <span>{listingTypeLabel(p)}</span>
-                      {p.propertyType ? <span>{String(p.propertyType).replace(/_/g, " ")}</span> : null}
-                    </div>
-                    <strong className="customer-browse-price">{propertyPriceLabel(p)}</strong>
-                    {facts.length ? (
-                      <div className="customer-property-facts customer-browse-facts">
-                        {facts.map((fact) => (
-                          <div key={fact.label} className="customer-property-fact customer-browse-fact">
-                            <span>{fact.label}:</span>
-                            <strong>{fact.value}</strong>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="agent-property-actions customer-browse-actions">
-                      <Link className="btn btn-outline-dark btn-sm customer-property-action customer-browse-action" to={`/properties/${p.id}`} state={propertyLinkState}>
-                        Details
+                    <div className="customer-browse-footer">
+                      <Link
+                        className="customer-browse-footer-action"
+                        to={`/properties/${p.id}`}
+                        state={propertyLinkState}
+                      >
+                        Show details
                       </Link>
                       <button
-                        className="btn btn-dark btn-sm customer-property-action customer-browse-action"
+                        type="button"
+                        className="customer-browse-footer-action dark"
                         onClick={() => startBookingForProperty(p.id)}
                         disabled={!isAvailable}
-                        title={isAvailable ? "Book appointment for this property" : "This property is not available"}
                       >
-                        {isAvailable ? "Book Appointment" : "Not Available"}
+                        {isAvailable ? "Book appointment" : "Not available"}
                       </button>
                     </div>
                   </div>
@@ -956,418 +974,407 @@ export default function CustomerDashboard() {
             </section>
 
             {!!booking.propertyId && !!selectedBookingProperty && canUsePortal && createPortal(
-              <section className="shop-booking-modal-wrap" onClick={resetBookingFlow}>
-                <article
+              <div className="bk-wrap" onClick={resetBookingFlow}>
+                <div
                   ref={bookingModalRef}
-                  className="shop-booking-modal"
+                  className="bk-modal"
                   onClick={(e) => e.stopPropagation()}
                   role="dialog"
                   aria-modal="true"
-                  aria-labelledby="customer-booking-title"
+                  aria-labelledby="bk-title"
                 >
-                  <div className="shop-booking-head">
-                    <div className="shop-booking-head-copy">
-                      <span className="shop-booking-kicker">Book Appointment</span>
-                      <h4 id="customer-booking-title">{selectedBookingProperty.title}</h4>
-                      <div className="small muted"><i className="bi bi-geo-alt"></i> {selectedBookingProperty.location}</div>
+                  {/* Header */}
+                  <div className="bk-header">
+                    <div className="bk-header-left">
+                      <span className="bk-eyebrow">Book Appointment</span>
+                      <h4 id="bk-title" className="bk-title">{selectedBookingProperty.title}</h4>
+                      <div className="bk-location"><i className="bi bi-geo-alt"></i> {selectedBookingProperty.location}</div>
                     </div>
-                    <button type="button" className="btn btn-outline-dark btn-sm shop-booking-close" onClick={resetBookingFlow}>Close</button>
-                  </div>
-
-                  <div className="shop-booking-hero-shell">
-                    <img
-                      src={getPropertyImage(selectedBookingProperty)}
-                      alt={selectedBookingProperty.title || "Property"}
-                      className="shop-booking-hero-thumb"
-                      onError={(e) => handlePropertyImageError(e, selectedBookingProperty)}
-                    />
-                    <div className="shop-booking-hero-meta">
-                      <div className="shop-booking-hero-card">
-                        <span>Location</span>
-                        <strong>{selectedBookingProperty.location || "-"}</strong>
-                      </div>
-                      <div className="shop-booking-hero-card accent">
-                        <span>Price</span>
-                        <strong>{propertyPriceLabel(selectedBookingProperty)}</strong>
-                      </div>
+                    <div className="bk-header-right">
+                      <div className="bk-price-pill">{propertyPriceLabel(selectedBookingProperty)}</div>
+                      <button type="button" className="bk-close" onClick={resetBookingFlow} aria-label="Close">
+                        <i className="bi bi-x-lg"></i>
+                      </button>
                     </div>
                   </div>
 
-                  <div className="shop-booking-progress" aria-label="Appointment booking progress">
-                    {["Date & Time", "Review", "Confirmed"].map((label, index) => {
-                      const stepNumber = index + 1;
-                      const isActive = bookingStep === stepNumber;
-                      const isComplete = bookingStep > stepNumber;
-                      return (
-                        <div key={label} className={`shop-booking-progress-step${isActive ? " active" : ""}${isComplete ? " complete" : ""}`}>
-                          <div className="shop-booking-progress-dot">
-                            {isComplete ? <i className="bi bi-check-lg"></i> : stepNumber}
-                          </div>
-                          <span>{label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="shop-booking-subcopy">
-                    Choose a viewing schedule first, review the details, then send your booking request.
-                  </div>
-
-                  <div className="shop-booking-step-body">
-                  {bookingStep === 1 && (
-                    <>
-                      <section className="shop-booking-stage-card single-step">
-                        <div className="shop-booking-stage-head">
-                          <h5>Choose your schedule</h5>
-                          <p>Pick the best day and time for your property visit.</p>
-                        </div>
-                        <div className="shop-booking-current-selection" aria-label="Current appointment selection">
-                          <div className={`shop-booking-selection-pill${booking.date ? " is-selected" : ""}`}>
-                            <span>Date</span>
-                            <strong>{formatFriendlyBookingDate(booking.date)}</strong>
-                          </div>
-                          <div className={`shop-booking-selection-pill${booking.time ? " is-selected" : ""}`}>
-                            <span>Time</span>
-                            <strong>{booking.time ? formatClockTime(booking.time) : "Not selected"}</strong>
-                          </div>
-                        </div>
-                        <div className="shop-booking-stage-grid">
-                          <div>
-                            <label className="form-label">Preferred date</label>
-                            <input
-                              ref={bookingDateInputRef}
-                              type="date"
-                              className="form-control"
-                              min={minBookingDate}
-                              value={booking.date}
-                              onChange={(e) => {
-                                const nextDate = e.target.value;
-                                setBooking((b) => {
-                                  const keepTime = b.time && isWithinOperatingHours(nextDate, b.time);
-                                  return { ...b, date: nextDate, time: keepTime ? b.time : "" };
-                                });
-                              }}
-                            />
-                            <div className="shop-booking-inline-note">
-                              <strong>Office hours</strong>
-                              <span>Mon-Fri 8:00 AM to 5:00 PM | Sat 8:00 AM to 1:00 PM | Sun closed</span>
-                            </div>
-                            {!!booking.date && (
-                              <div className="shop-booking-inline-note subtle">
-                                <strong>Selected day</strong>
-                                <span>{bookingOperatingHours.label}</span>
+                  {/* Progress — only on steps 1–3 */}
+                  {bookingStep < 4 && (
+                    <div className="bk-progress" aria-label="Booking progress">
+                      {["Schedule", "Your Details", "Confirm"].map((label, i) => {
+                        const stepNum = i + 1;
+                        const isActive = bookingStep === stepNum;
+                        const isDone = bookingStep > stepNum;
+                        return (
+                          <React.Fragment key={label}>
+                            <div className={`bk-step${isActive ? " bk-step--active" : ""}${isDone ? " bk-step--done" : ""}`}>
+                              <div className="bk-step-dot">
+                                {isDone ? <i className="bi bi-check-lg"></i> : stepNum}
                               </div>
-                            )}
-                          </div>
-                          <div>
-                            <label className="form-label">Selected time</label>
-                            <div className={`shop-booking-selected-time compact${booking.time ? " has-value" : ""}`}>
-                              {booking.time ? formatClockTime(booking.time) : "No time selected yet"}
+                              <span>{label}</span>
                             </div>
-                            <div className="small muted shop-booking-field-hint">
-                              {!booking.date
-                                ? "Choose a date to see available appointment times."
-                                : bookingOperatingHours.isClosed
-                                  ? "Appointments are unavailable on Sundays."
-                                  : booking.time
-                                    ? `Selected slot: ${formatClockTime(booking.time)}`
-                                    : `${bookingTimeOptions.length} available time slots for this day.`}
-                            </div>
-                            <div
-                              className={`shop-booking-slot-grid compact${!booking.date || bookingOperatingHours.isClosed || !bookingTimeOptions.length ? " is-disabled" : ""}`}
-                              role="listbox"
-                              aria-label="Available appointment times"
-                            >
-                              {!booking.date && (
-                                <div className="shop-booking-slot-empty">Pick a date to unlock time slots.</div>
-                              )}
-                              {!!booking.date && bookingOperatingHours.isClosed && (
-                                <div className="shop-booking-slot-empty">Appointments are unavailable on Sundays.</div>
-                              )}
-                              {!!booking.date && !bookingOperatingHours.isClosed && !bookingTimeOptions.length && (
-                                <div className="shop-booking-slot-empty">No time slots are available for this date.</div>
-                              )}
-                              {!!booking.date && !bookingOperatingHours.isClosed && bookingTimeOptions.map((slot) => (
-                                <button
-                                  key={slot.value}
-                                  type="button"
-                                  className={`shop-booking-slot${booking.time === slot.value ? " active" : ""}`}
-                                  onClick={() => setBooking((b) => ({ ...b, time: slot.value }))}
-                                  aria-pressed={booking.time === slot.value ? "true" : "false"}
-                                >
-                                  <span>{slot.label}</span>
-                                  {booking.time === slot.value ? (
-                                    <i className="bi bi-check2"></i>
-                                  ) : POPULAR_BOOKING_TIMES.has(slot.value) ? (
-                                    <small>Popular</small>
-                                  ) : null}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="shop-booking-notes-block">
-                          <label className="form-label">Special requests</label>
-                          <textarea
-                            className="form-control"
-                            rows="3"
-                            placeholder="Accessibility needs, preferred language, or any notes for the team."
-                            value={booking.notes}
-                            onChange={(e) => setBooking((b) => ({ ...b, notes: e.target.value }))}
-                          ></textarea>
-                          <div className="shop-booking-field-hint">
-                            Optional. This will be included with your appointment request.
-                          </div>
-                        </div>
-                      </section>
-                      <div className="d-flex gap-2 mt-2 shop-booking-actions">
-                        <button type="button" className="btn btn-outline-dark" onClick={resetBookingFlow}>Cancel</button>
-                        <button
-                          type="button"
-                          className="btn btn-dark"
-                          disabled={!canContinueBooking}
-                          onClick={() => {
-                            const message = getBookingRequiredMessage(normalizedBooking.date, normalizedBooking.time);
-                            if (message) {
-                              feedback.notify(message, "error");
-                              return;
-                            }
-                            if (!isWithinOperatingHours(normalizedBooking.date, normalizedBooking.time)) {
-                              if (bookingOperatingHours.isClosed) {
-                                feedback.notify("Appointments are not available on Sunday.", "error");
-                              } else {
-                                feedback.notify(`Appointment time must be within ${bookingOperatingHours.label}.`, "error");
-                              }
-                              return;
-                            }
-                            if (!isFutureOrNowSlot(normalizedBooking.date, normalizedBooking.time)) {
-                              feedback.notify("Appointment schedule must be now or in the future.", "error");
-                              return;
-                            }
-                            setBookingStep(2);
-                          }}
-                        >
-                          Next: Review
-                        </button>
-                      </div>
-                    </>
+                            {i < 2 && <div className="bk-step-line" />}
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
                   )}
 
-                  {bookingStep === 2 && (
-                    <div className="shop-booking-step shop-booking-review-grid">
-                      <div className="appointment-review-card shop-booking-review-card">
-                        <div className="fw-bold">Review your request</div>
-                        <div className="shop-booking-review-list">
-                          <div className="shop-booking-review-row">
-                            <span>Property</span>
-                            <strong>{selectedBookingProperty.title || "(unknown)"}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
-                            <span>Location</span>
-                            <strong>{selectedBookingProperty.location || "-"}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
-                            <span>Price</span>
-                            <strong>{propertyPriceLabel(selectedBookingProperty)}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
-                            <span>Schedule</span>
-                            <strong>{formatDateTimeLabel(booking.date, booking.time, { joiner: " at " })}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
-                            <span>Status</span>
-                            <strong className="shop-booking-review-status">Pending approval</strong>
+                  {/* Body */}
+                  <div className="bk-body">
+
+                    {/* ── Step 1: Schedule ── */}
+                    {bookingStep === 1 && (
+                      <div className="bk-step-content">
+                        <div className="bk-step-header">
+                          <strong>Choose a schedule</strong>
+                          <p>Pick a day and time for your property visit.</p>
+                        </div>
+
+                        {/* Appointment type */}
+                        <div className="bk-field">
+                          <label className="bk-label">Appointment type</label>
+                          <div className="bk-type-grid">
+                            {[
+                              { value: "property_viewing", label: "Property Viewing", icon: "bi-house" },
+                              { value: "virtual_tour", label: "Virtual Tour", icon: "bi-camera-video" },
+                              { value: "consultation", label: "Consultation", icon: "bi-chat-text" }
+                            ].map((type) => (
+                              <button
+                                key={type.value}
+                                type="button"
+                                className={`bk-type-btn${booking.appointmentType === type.value ? " bk-type-btn--active" : ""}`}
+                                onClick={() => setBooking((b) => ({ ...b, appointmentType: type.value }))}
+                              >
+                                <i className={`bi ${type.icon}`}></i>
+                                <span>{type.label}</span>
+                              </button>
+                            ))}
                           </div>
                         </div>
-                      </div>
-                      <div className="appointment-review-card shop-booking-review-card compact">
-                        <div className="fw-bold">Your contact details</div>
-                        <div className="shop-booking-review-list">
-                          <div className="shop-booking-review-row">
-                            <span>Name</span>
-                            <strong>{profileForm.fullName || user?.username || "-"}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
-                            <span>Email</span>
-                            <strong>{profileForm.email || "-"}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
-                            <span>Phone</span>
-                            <strong>{profileForm.phone || "-"}</strong>
+
+                        {/* Date */}
+                        <div className="bk-field">
+                          <label className="bk-label" htmlFor="bk-date">Preferred date</label>
+                          <input
+                            id="bk-date"
+                            ref={bookingDateInputRef}
+                            type="date"
+                            className="bk-input"
+                            min={minBookingDate}
+                            value={booking.date}
+                            onChange={(e) => {
+                              const nextDate = e.target.value;
+                              setBooking((b) => {
+                                const keepTime = b.time && isWithinOperatingHours(nextDate, b.time);
+                                return { ...b, date: nextDate, time: keepTime ? b.time : "" };
+                              });
+                            }}
+                          />
+                          <div className="bk-hint">Mon–Fri 8:00 AM–5:00 PM · Sat 8:00 AM–1:00 PM · Sun closed</div>
+                        </div>
+
+                        {/* Time slots */}
+                        <div className="bk-field">
+                          <label className="bk-label">
+                            Time slot
+                            {booking.time && <span className="bk-selected-badge">{formatClockTime(booking.time)}</span>}
+                          </label>
+                          <div
+                            className={`bk-slots${!booking.date || bookingOperatingHours.isClosed ? " bk-slots--locked" : ""}`}
+                            role="listbox"
+                            aria-label="Available appointment times"
+                          >
+                            {!booking.date && <div className="bk-slots-empty">Select a date to see available times</div>}
+                            {booking.date && bookingOperatingHours.isClosed && <div className="bk-slots-empty">Closed on Sundays — pick another day</div>}
+                            {booking.date && !bookingOperatingHours.isClosed && !bookingTimeOptions.length && <div className="bk-slots-empty">No slots available for this date</div>}
+                            {booking.date && !bookingOperatingHours.isClosed && bookingTimeOptions.map((slot) => (
+                              <button
+                                key={slot.value}
+                                type="button"
+                                className={`bk-slot${booking.time === slot.value ? " bk-slot--active" : ""}`}
+                                onClick={() => setBooking((b) => ({ ...b, time: slot.value }))}
+                                aria-pressed={booking.time === slot.value}
+                              >
+                                {slot.label}
+                                {booking.time === slot.value
+                                  ? <i className="bi bi-check2"></i>
+                                  : POPULAR_BOOKING_TIMES.has(slot.value)
+                                    ? <span className="bk-slot-pop">Popular</span>
+                                    : null}
+                              </button>
+                            ))}
                           </div>
                         </div>
-                      </div>
-                      <div className="appointment-review-card shop-booking-review-card compact">
-                        <div className="fw-bold">Special requests</div>
-                        <div className="shop-booking-review-note">
-                          {cleanText(booking.notes, 500) || "No extra notes added for this booking."}
-                        </div>
-                      </div>
-                      <div className="shop-booking-confirm-note">
-                        Confirming will send your viewing request to the assigned real-estate team for approval.
-                      </div>
-                      <div className="d-flex gap-2 mt-2 shop-booking-actions">
-                        <button type="button" className="btn btn-outline-dark" onClick={() => setBookingStep(1)}>Back</button>
-                        <button
-                          type="button"
-                          className="btn btn-dark"
-                          disabled={!canConfirmBooking}
-                          onClick={async () => {
-                            if (isSubmittingBooking) return;
-                            if (!booking.propertyId || !normalizedBooking.date || !normalizedBooking.time) {
-                              feedback.notify("Select both date and time.", "error");
-                              return;
-                            }
-                            if (!isWithinOperatingHours(normalizedBooking.date, normalizedBooking.time)) {
-                              if (bookingOperatingHours.isClosed) {
-                                feedback.notify("Appointments are not available on Sunday.", "error");
-                              } else {
-                                feedback.notify(`Appointment time must be within ${bookingOperatingHours.label}.`, "error");
+
+                        <div className="bk-actions">
+                          <button type="button" className="bk-btn bk-btn--ghost" onClick={resetBookingFlow}>Cancel</button>
+                          <button
+                            type="button"
+                            className="bk-btn bk-btn--primary"
+                            disabled={!canContinueBooking}
+                            onClick={() => {
+                              const message = getBookingRequiredMessage(normalizedBooking.date, normalizedBooking.time);
+                              if (message) { feedback.notify(message, "error"); return; }
+                              if (!isWithinOperatingHours(normalizedBooking.date, normalizedBooking.time)) {
+                                feedback.notify(bookingOperatingHours.isClosed ? "Appointments are not available on Sunday." : `Appointment time must be within ${bookingOperatingHours.label}.`, "error");
+                                return;
                               }
-                              return;
-                            }
-                            if (!isFutureOrNowSlot(normalizedBooking.date, normalizedBooking.time)) {
-                              feedback.notify("Appointment schedule must be now or in the future.", "error");
-                              return;
-                            }
-                            const pid = String(booking.propertyId);
-                            const duplicate = apps.some((a) => a.customer === user.username && String(a.propertyId) === pid && a.date === normalizedBooking.date && a.time === normalizedBooking.time);
-                            if (duplicate) {
-                              feedback.notify("You already have a booking for this property at the same date and time.", "error");
-                              return;
-                            }
-                            try {
-                              setIsSubmittingBooking(true);
-                              const res = await apiRequest("/api/appointments", {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  propertyId: pid,
+                              if (!isFutureOrNowSlot(normalizedBooking.date, normalizedBooking.time)) {
+                                feedback.notify("Appointment schedule must be now or in the future.", "error");
+                                return;
+                              }
+                              setBookingStep(2);
+                            }}
+                          >
+                            Next: Your Details <i className="bi bi-arrow-right"></i>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Step 2: Contact Details ── */}
+                    {bookingStep === 2 && (
+                      <div className="bk-step-content">
+                        <div className="bk-step-header">
+                          <strong>Your details</strong>
+                          <p>We'll use this to confirm your appointment.</p>
+                        </div>
+                        <div className="bk-fields-grid">
+                          <div className="bk-field">
+                            <label className="bk-label" htmlFor="bk-name">Full name</label>
+                            <input
+                              id="bk-name"
+                              type="text"
+                              className="bk-input"
+                              placeholder="Juan Dela Cruz"
+                              value={booking.fullName}
+                              onChange={(e) => setBooking((b) => ({ ...b, fullName: e.target.value }))}
+                            />
+                          </div>
+                          <div className="bk-field">
+                            <label className="bk-label" htmlFor="bk-email">Email</label>
+                            <input
+                              id="bk-email"
+                              type="email"
+                              className="bk-input"
+                              placeholder="you@email.com"
+                              value={booking.email}
+                              onChange={(e) => setBooking((b) => ({ ...b, email: e.target.value }))}
+                            />
+                          </div>
+                          <div className="bk-field">
+                            <label className="bk-label" htmlFor="bk-phone">Phone number</label>
+                            <input
+                              id="bk-phone"
+                              type="tel"
+                              className="bk-input"
+                              placeholder="09XX XXX XXXX"
+                              value={booking.phone}
+                              onChange={(e) => setBooking((b) => ({ ...b, phone: e.target.value }))}
+                            />
+                          </div>
+                          <div className="bk-field">
+                            <label className="bk-label" htmlFor="bk-notes">Special requests <span className="bk-optional">(optional)</span></label>
+                            <textarea
+                              id="bk-notes"
+                              className="bk-input bk-textarea"
+                              rows="3"
+                              placeholder="Accessibility needs, preferred language, any notes..."
+                              value={booking.notes}
+                              onChange={(e) => setBooking((b) => ({ ...b, notes: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                        <div className="bk-actions">
+                          <button type="button" className="bk-btn bk-btn--ghost" onClick={() => setBookingStep(1)}>Back</button>
+                          <button
+                            type="button"
+                            className="bk-btn bk-btn--primary"
+                            disabled={!canAdvanceToConfirm}
+                            onClick={() => setBookingStep(3)}
+                          >
+                            Review Appointment <i className="bi bi-arrow-right"></i>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Step 3: Confirm ── */}
+                    {bookingStep === 3 && (
+                      <div className="bk-step-content">
+                        <div className="bk-step-header">
+                          <strong>Review &amp; confirm</strong>
+                          <p>Check your details before submitting.</p>
+                        </div>
+                        <div className="bk-review">
+                          {[
+                            ["Property", selectedBookingProperty.title || "(unknown)"],
+                            ["Location", selectedBookingProperty.location || "-"],
+                            ["Type", appointmentTypeLabel(booking.appointmentType)],
+                            ["Date", formatFriendlyBookingDate(booking.date)],
+                            ["Time", formatClockTime(booking.time)],
+                            ["Price", propertyPriceLabel(selectedBookingProperty)],
+                            ["Name", normalizedBooking.fullName || "-"],
+                            ["Email", normalizedBooking.email || "-"],
+                            ["Phone", normalizedBooking.phone || "-"]
+                          ].map(([key, val]) => (
+                            <div key={key} className="bk-review-row">
+                              <span>{key}</span>
+                              <strong>{val}</strong>
+                            </div>
+                          ))}
+                          {normalizedBooking.notes && (
+                            <div className="bk-review-row bk-review-row--notes">
+                              <span>Notes</span>
+                              <strong>{normalizedBooking.notes}</strong>
+                            </div>
+                          )}
+                          <div className="bk-review-row">
+                            <span>Status</span>
+                            <strong className="bk-status-pending">Pending approval</strong>
+                          </div>
+                        </div>
+                        <div className="bk-confirm-note">
+                          <i className="bi bi-info-circle"></i>
+                          Submitting sends your request to the real-estate team for review.
+                        </div>
+                        <div className="bk-actions">
+                          <button type="button" className="bk-btn bk-btn--ghost" onClick={() => setBookingStep(2)}>Back</button>
+                          <button
+                            type="button"
+                            className="bk-btn bk-btn--primary"
+                            disabled={!canConfirmBooking || isSubmittingBooking}
+                            onClick={async () => {
+                              if (isSubmittingBooking) return;
+                              if (!booking.propertyId || !normalizedBooking.date || !normalizedBooking.time) {
+                                feedback.notify("Select both date and time.", "error");
+                                return;
+                              }
+                              if (!isWithinOperatingHours(normalizedBooking.date, normalizedBooking.time)) {
+                                feedback.notify(bookingOperatingHours.isClosed ? "Appointments are not available on Sunday." : `Appointment time must be within ${bookingOperatingHours.label}.`, "error");
+                                return;
+                              }
+                              if (!isFutureOrNowSlot(normalizedBooking.date, normalizedBooking.time)) {
+                                feedback.notify("Appointment schedule must be now or in the future.", "error");
+                                return;
+                              }
+                              const pid = String(booking.propertyId);
+                              const duplicate = apps.some((a) => a.customer === user.username && String(a.propertyId) === pid && a.date === normalizedBooking.date && a.time === normalizedBooking.time);
+                              if (duplicate) {
+                                feedback.notify("You already have a booking for this property at the same date and time.", "error");
+                                return;
+                              }
+                              try {
+                                setIsSubmittingBooking(true);
+                                const res = await apiRequest("/api/appointments", {
+                                  method: "POST",
+                                  body: JSON.stringify({
+                                    propertyId: pid,
+                                    propertyTitle: selectedBookingProperty?.title || "(unknown)",
+                                    location: selectedBookingProperty?.location || "",
+                                    agent: selectedBookingProperty?.agent || "",
+                                    customer: user.username,
+                                    date: normalizedBooking.date,
+                                    time: normalizedBooking.time,
+                                    appointmentType: booking.appointmentType || "property_viewing",
+                                    contactFullName: normalizedBooking.fullName,
+                                    contactEmail: normalizedBooking.email,
+                                    contactPhone: normalizedBooking.phone,
+                                    notes: normalizedBooking.notes
+                                  })
+                                });
+                                const savedAppointment = res?.data;
+                                if (!savedAppointment?.id) throw new Error("Appointment was not saved by the server.");
+                                saveAppsLocal([
+                                  { ...savedAppointment, propertyImage: savedAppointment.propertyImage || getPropertyImage(selectedBookingProperty) },
+                                  ...apps.filter((appointment) => String(appointment?.id || "") !== String(savedAppointment.id))
+                                ]);
+                                notifyRoles({
+                                  roles: ["admin"],
+                                  type: "appointment",
+                                  title: "New Appointment Request",
+                                  message: `Customer @${user.username} requested ${selectedBookingProperty?.title || "a property"} on ${formatDateTimeLabel(normalizedBooking.date, normalizedBooking.time)}.`,
+                                  meta: {
+                                    customer: user.username,
+                                    agent: selectedBookingProperty?.agent || "",
+                                    propertyId: pid,
+                                    propertyTitle: selectedBookingProperty?.title || "",
+                                    date: normalizedBooking.date,
+                                    time: normalizedBooking.time
+                                  }
+                                });
+                                setBookingSuccess({
                                   propertyTitle: selectedBookingProperty?.title || "(unknown)",
                                   location: selectedBookingProperty?.location || "",
-                                  agent: selectedBookingProperty?.agent || "",
-                                  customer: user.username,
                                   date: normalizedBooking.date,
                                   time: normalizedBooking.time,
-                                  notes: cleanText(booking.notes, 500)
-                                })
-                              });
-                              const savedAppointment = res?.data;
-                              if (!savedAppointment?.id) {
-                                throw new Error("Appointment was not saved by the server.");
+                                  appointmentType: booking.appointmentType || "property_viewing",
+                                  appointmentId: savedAppointment.id || "",
+                                  contactFullName: normalizedBooking.fullName,
+                                  contactEmail: normalizedBooking.email,
+                                  contactPhone: normalizedBooking.phone,
+                                  notes: normalizedBooking.notes
+                                });
+                                setBookingStep(4);
+                              } catch (error) {
+                                feedback.notify(error?.message || "Unable to submit appointment.", "error");
+                              } finally {
+                                setIsSubmittingBooking(false);
                               }
-                              saveAppsLocal([
-                                {
-                                  ...savedAppointment,
-                                  propertyImage: savedAppointment.propertyImage || getPropertyImage(selectedBookingProperty)
-                                },
-                                ...apps.filter((appointment) => String(appointment?.id || "") !== String(savedAppointment.id))
-                              ]);
-                              notifyRoles({
-                                roles: ["admin"],
-                                type: "appointment",
-                                title: "New Appointment Request",
-                                message: `Customer @${user.username} requested ${selectedBookingProperty?.title || "a property"} on ${formatDateTimeLabel(normalizedBooking.date, normalizedBooking.time)}.`,
-                                meta: {
-                                  customer: user.username,
-                                  agent: selectedBookingProperty?.agent || "",
-                                  propertyId: pid,
-                                  propertyTitle: selectedBookingProperty?.title || "",
-                                  date: normalizedBooking.date,
-                                  time: normalizedBooking.time
-                                }
-                              });
-                              setBookingSuccess({
-                                propertyTitle: selectedBookingProperty?.title || "(unknown)",
-                                location: selectedBookingProperty?.location || "",
-                                date: normalizedBooking.date,
-                                time: normalizedBooking.time,
-                                appointmentId: savedAppointment.id || "",
-                                notes: cleanText(booking.notes, 500)
-                              });
-                              setBookingStep(3);
-                            } catch (error) {
-                              feedback.notify(error?.message || "Unable to submit appointment.", "error");
-                            } finally {
-                              setIsSubmittingBooking(false);
-                            }
-                          }}
-                        >
-                          {isSubmittingBooking ? "Confirming..." : "Confirm Booking"}
-                        </button>
+                            }}
+                          >
+                            {isSubmittingBooking ? "Submitting..." : "Submit Appointment"}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {bookingStep === 3 && (
-                    <div className="shop-booking-step shop-booking-success-layout">
-                      <div className="shop-booking-success-card">
-                        <div className="shop-booking-success-icon">
-                          <i className="bi bi-check2"></i>
-                        </div>
-                        <div className="shop-booking-success-copy">
-                          <div className="fw-bold">Appointment booked successfully</div>
-                          <p>Your property viewing request has been submitted.</p>
-                        </div>
-                      </div>
-                      <div className="appointment-review-card shop-booking-review-card">
-                        <div className="fw-bold">Booking details</div>
-                        <div className="shop-booking-review-list">
-                          <div className="shop-booking-review-row">
-                            <span>Property</span>
-                            <strong>{bookingSuccess?.propertyTitle || selectedBookingProperty.title || "(unknown)"}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
-                            <span>Schedule</span>
-                            <strong>{formatDateTimeLabel(bookingSuccess?.date || booking.date, bookingSuccess?.time || booking.time, { joiner: " at " })}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
-                            <span>Reference</span>
-                            <strong>{bookingSuccess?.appointmentId || "Pending reference"}</strong>
-                          </div>
-                          <div className="shop-booking-review-row">
+                    {/* ── Step 4: Success ── */}
+                    {bookingStep === 4 && (
+                      <div className="bk-success">
+                        <div className="bk-success-icon"><i className="bi bi-check-lg"></i></div>
+                        <h4 className="bk-success-title">Appointment requested!</h4>
+                        <p className="bk-success-sub">Your viewing request is now pending agent approval.</p>
+                        <div className="bk-review" style={{ width: "100%", textAlign: "left" }}>
+                          {[
+                            ["Property", bookingSuccess?.propertyTitle || selectedBookingProperty.title],
+                            ["Schedule", formatDateTimeLabel(bookingSuccess?.date || booking.date, bookingSuccess?.time || booking.time, { joiner: " at " })],
+                            ["Type", appointmentTypeLabel(bookingSuccess?.appointmentType || booking.appointmentType)],
+                            ["Reference", bookingSuccess?.appointmentId || "—"]
+                          ].map(([key, val]) => (
+                            <div key={key} className="bk-review-row">
+                              <span>{key}</span>
+                              <strong>{val}</strong>
+                            </div>
+                          ))}
+                          <div className="bk-review-row">
                             <span>Status</span>
-                            <strong className="shop-booking-review-status">Pending approval</strong>
+                            <strong className="bk-status-pending">Pending approval</strong>
                           </div>
                         </div>
-                      </div>
-                      <div className="appointment-review-card shop-booking-review-card compact">
-                        <div className="fw-bold">What happens next</div>
-                        <div className="shop-booking-next-list">
-                          <div className="shop-booking-next-item">
-                            <span>1</span>
-                            <div>
-                              <strong>Request sent</strong>
-                              <p>Your booking is now with the property team.</p>
+                        <div className="bk-next-steps">
+                          {[
+                            ["Request sent", "Your booking is now with the property team."],
+                            ["Agent review", "The agent can confirm, reschedule, or cancel."],
+                            ["You're notified", "Status updates appear in your dashboard."]
+                          ].map(([title, desc], i) => (
+                            <div key={title} className="bk-next-item">
+                              <span className="bk-next-num">{i + 1}</span>
+                              <div>
+                                <strong>{title}</strong>
+                                <p>{desc}</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="shop-booking-next-item">
-                            <span>2</span>
-                            <div>
-                              <strong>Team review</strong>
-                              <p>They will verify availability and your selected slot.</p>
-                            </div>
-                          </div>
-                          <div className="shop-booking-next-item">
-                            <span>3</span>
-                            <div>
-                              <strong>Notification</strong>
-                              <p>You will receive updates in your account and notifications feed.</p>
-                            </div>
-                          </div>
+                          ))}
                         </div>
+                        <button type="button" className="bk-btn bk-btn--primary bk-btn--full" onClick={resetBookingFlow}>Done</button>
                       </div>
-                      <div className="shop-booking-confirm-note strong">
-                        We will contact you if there are updates to your viewing request.
-                      </div>
-                      <div className="d-flex gap-2 mt-2 shop-booking-actions">
-                        <button type="button" className="btn btn-dark" onClick={resetBookingFlow}>Done</button>
-                      </div>
-                    </div>
-                  )}
+                    )}
+
                   </div>
-                </article>
-              </section>,
+                </div>
+              </div>,
               document.body
             )}
           </>

@@ -25,6 +25,7 @@ import {
   normalizeWorkflowStatus,
   normalizeAppointmentImages,
   propertyPriceLabel,
+  resolveAppointmentImage,
   propertyStatusLabel,
   statusBadgeClass,
   tripStatus,
@@ -520,10 +521,7 @@ export default function AdminDashboard() {
     [trips]
   );
   const getPropertyImage = (appointment) => {
-    const explicit = String(appointment?.propertyImage || "").trim();
-    if (explicit) return explicit;
-    const matchedProperty = properties.find((p) => String(p.id) === String(appointment?.propertyId));
-    return withImage(matchedProperty || { id: appointment?.propertyId, title: appointment?.propertyTitle, location: appointment?.location });
+    return resolveAppointmentImage(appointment, properties);
   };
   const handlePropertyImageError = (event, propertyLike) => {
     applyPropertyImageFallback(event.currentTarget, propertyLike || { title: "Property" });
@@ -1312,11 +1310,11 @@ export default function AdminDashboard() {
                       </span>
                     </div>
                     <p><i className="bi bi-geo-alt"></i> {p.location}</p>
-                    <div className="public-home-property-tags">
-                      <span>{listingTypeLabel(p)}</span>
-                      {p.propertyType ? <span>{String(p.propertyType).replace(/_/g, " ")}</span> : null}
-                      {p.agent ? <span>{formatAgentIdentity(p.agent)}</span> : null}
-                    </div>
+                    {p.agent ? (
+                      <div className="public-home-property-tags">
+                        <span>{formatAgentIdentity(p.agent)}</span>
+                      </div>
+                    ) : null}
                     <strong>{propertyPriceLabel(p)}</strong>
                     <div className="agent-property-meta">
                       <span><i className="bi bi-door-open"></i> {Number(p.bedrooms || 0)} bed</span>

@@ -60,6 +60,7 @@ api.post("/appointments", requireRole(["customer", "admin"]), asyncHandler(async
   const customer = clean(req.body?.customer || req.headers["x-user-username"], 60);
   const date = clean(req.body?.date, 20);
   const time = clean(req.body?.time, 10);
+  const requestedAppointmentType = clean(req.body?.appointmentType, 40);
   if (!propertyId || !customer || !isIsoDate(date) || !isHHMM(time)) {
     return res.status(400).json({ ok: false, message: "propertyId, customer, valid date (YYYY-MM-DD), and time (HH:MM) are required." });
   }
@@ -80,6 +81,34 @@ api.post("/appointments", requireRole(["customer", "admin"]), asyncHandler(async
     const property = ensureAccessibleProperty(findPropertyRecord(db, propertyId));
     const customerRecord = assertRoleUser(db, customer, "customer", "Customer not found.");
     const customerUsername = String(customerRecord.username || "").trim();
+    const contactFullName =
+      clean(req.body?.contactFullName || req.body?.fullName, 90) ||
+      clean(customerRecord.fullName, 90) ||
+      customerUsername;
+    const contactEmail =
+      clean(req.body?.contactEmail || req.body?.email, 120).toLowerCase() ||
+      clean(customerRecord.email, 120).toLowerCase();
+    const contactPhone =
+      clean(req.body?.contactPhone || req.body?.phone, 30) ||
+      clean(customerRecord.phone, 30);
+    const appointmentType = String(requestedAppointmentType || "").trim().toLowerCase().replace(/[\s-]+/g, "_") || "property_viewing";
+
+    if (!contactFullName || !contactEmail || !contactPhone) {
+      const err = new Error("Full name, email, and phone number are required.");
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!isValidEmail(contactEmail)) {
+      const err = new Error("Please provide a valid email address.");
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!isValidPhone(contactPhone)) {
+      const err = new Error("Please provide a valid phone number.");
+      err.statusCode = 400;
+      throw err;
+    }
+
     const duplicatePending = db.appointments.some((a) => {
       const appointment = sanitizeAppointmentRecord(a);
       return (
@@ -106,6 +135,10 @@ api.post("/appointments", requireRole(["customer", "admin"]), asyncHandler(async
       agent: clean(req.body?.agent || property.agent, 60),
       date,
       time,
+      appointmentType,
+      contactFullName,
+      contactEmail,
+      contactPhone,
       status: "pending",
       notes: clean(req.body?.notes, 500),
       createdAt: new Date().toISOString()

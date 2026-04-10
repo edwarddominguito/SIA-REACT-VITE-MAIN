@@ -346,56 +346,11 @@ export default function DashboardCalendar({
               <i className="bi bi-lightning-charge"></i>
               <span>{countLabel(monthEvents.length, "event")}</span>
             </div>
-            <div className="dashboard-calendar-head-pill">
-              <i className="bi bi-funnel"></i>
-              <span>{hasFilters ? "Filters active" : "Full month view"}</span>
-            </div>
           </div>
         </div>
 
         <div className="dashboard-calendar-toolbar">
-          <div className="dashboard-calendar-toolbar-main">
-            <div className="dashboard-calendar-filters" role="tablist" aria-label="Calendar event filters">
-              {filterTabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  className={`dashboard-calendar-filter${activeFilter === tab.key ? " active" : ""}`}
-                  aria-pressed={activeFilter === tab.key ? "true" : "false"}
-                  onClick={() => setActiveFilter(tab.key)}
-                >
-                  <i className={`bi ${(TYPE_META[tab.key] || TYPE_META.event).icon}`}></i>
-                  <span>{tab.label}</span>
-                  <strong>{tab.count}</strong>
-                </button>
-              ))}
-            </div>
-
-            <label className="dashboard-calendar-search" aria-label="Search calendar events">
-              <i className="bi bi-search"></i>
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search title, status, or event type"
-              />
-            </label>
-          </div>
-
           <div className="dashboard-calendar-controls">
-            {hasFilters && (
-              <button
-                type="button"
-                className="dashboard-calendar-control-btn subtle"
-                onClick={() => {
-                  setActiveFilter("all");
-                  setSearch("");
-                }}
-              >
-                Reset
-              </button>
-            )}
-
             <button
               type="button"
               className="dashboard-calendar-control-btn"
@@ -496,7 +451,9 @@ export default function DashboardCalendar({
                       </div>
 
                       <div className="dashboard-calendar-events">
-                        {list.slice(0, 2).map((evt) => (
+                        {list.slice(0, 2).map((evt) => {
+                          const typeMeta = TYPE_META[evt.type] || TYPE_META.event;
+                          return (
                           <button
                             key={evt.id}
                             type="button"
@@ -509,8 +466,10 @@ export default function DashboardCalendar({
                           >
                             <span>{formatClockTime(evt.time, "Any time")}</span>
                             <strong>{evt.title}</strong>
+                            <small>{typeMeta.label}</small>
                           </button>
-                        ))}
+                        );
+                        })}
 
                         {list.length > 2 && (
                           <button
@@ -528,143 +487,6 @@ export default function DashboardCalendar({
               </div>
             </div>
           </div>
-
-          <aside className="dashboard-calendar-sidebar">
-            <div className="dashboard-calendar-agenda dashboard-calendar-sidebar-card">
-              <div className="dashboard-calendar-agenda-head compact">
-                <div>
-                  <span className="dashboard-calendar-sidebar-kicker">{sidebarHeading}</span>
-                  <h4>{agendaHeading}</h4>
-                  <p>{agendaSubheading}</p>
-                </div>
-                <div className="dashboard-calendar-agenda-meta">
-                  {countLabel(selectedDateEvents.length, "event")}
-                </div>
-              </div>
-
-              {selectedDateEvents.length ? (
-                <>
-                  <div className="dashboard-calendar-upcoming-list compact">
-                    {selectedDateEvents.map((evt) => {
-                      const typeMeta = TYPE_META[evt.type] || TYPE_META.event;
-                      return (
-                        <button
-                          key={evt.id}
-                          type="button"
-                          className={`dashboard-calendar-upcoming-item compact type-${evt.type}${selectedEvent?.id === evt.id ? " active" : ""}`}
-                          onClick={() => setSelectedEventId(evt.id)}
-                        >
-                          <div className="dashboard-calendar-upcoming-icon">
-                            <i className={`bi ${typeMeta.icon}`}></i>
-                          </div>
-                          <div className="dashboard-calendar-upcoming-copy">
-                            <div className="dashboard-calendar-upcoming-title-row">
-                              <div className="dashboard-calendar-upcoming-title">{evt.title}</div>
-                              <span className={`dashboard-calendar-status status-${evt.status || "pending"}`}>
-                                {formatStatusLabel(evt.status)}
-                              </span>
-                            </div>
-                            <div className="dashboard-calendar-upcoming-time">
-                              {formatAgendaDate(evt.dateObject, evt.time)}
-                            </div>
-                            <div className="dashboard-calendar-upcoming-type">{typeMeta.label}</div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {selectedEvent && (
-                    <div className="dashboard-calendar-detail compact">
-                      <div className="dashboard-calendar-detail-top">
-                        <div className="dashboard-calendar-detail-hero">
-                          <div className={`dashboard-calendar-detail-icon type-${selectedEvent.type}`}>
-                            <i className={`bi ${selectedTypeMeta.icon}`}></i>
-                          </div>
-                          <div>
-                            <small>{selectedTypeMeta.label}</small>
-                            <strong>{selectedEvent.title}</strong>
-                            <p>{selectedEvent.subtitle || "Selected event details for this schedule."}</p>
-                          </div>
-                        </div>
-                        <span className={`dashboard-calendar-status status-${selectedEvent.status || "pending"}`}>
-                          {formatStatusLabel(selectedEvent.status)}
-                        </span>
-                      </div>
-
-                      <div className="dashboard-calendar-detail-grid compact">
-                        <div>
-                          <span>Date & Time</span>
-                          <strong>{formatAgendaDate(selectedEvent.dateObject, selectedEvent.time)}</strong>
-                        </div>
-                        <div>
-                          <span>Event Type</span>
-                          <strong>{selectedTypeMeta.label}</strong>
-                        </div>
-                        <div>
-                          <span>Status</span>
-                          <strong>{formatStatusLabel(selectedEvent.status)}</strong>
-                        </div>
-                      </div>
-
-                      {selectedEvent.description ? (
-                        <div className="dashboard-calendar-detail-note">{selectedEvent.description}</div>
-                      ) : (
-                        <div className="dashboard-calendar-detail-note muted">
-                          <p>{selectedEvent.subtitle || "Selected event details for this schedule."}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="dashboard-calendar-empty compact">
-                  No events matched the current filter for this day. Pick another date or reset the filters.
-                </div>
-              )}
-            </div>
-
-            <div className="dashboard-calendar-sidebar-card dashboard-calendar-upcoming-panel">
-              <div className="dashboard-calendar-sidebar-section-head">
-                <div>
-                  <span className="dashboard-calendar-sidebar-kicker">Upcoming Events</span>
-                  <h4>Coming Up This Month</h4>
-                </div>
-                <span className="dashboard-calendar-agenda-meta">{countLabel(upcomingMonthEvents.length, "event")}</span>
-              </div>
-
-              {upcomingMonthEvents.length ? (
-                <div className="dashboard-calendar-upcoming-stack">
-                  {upcomingMonthEvents.map((evt) => {
-                    const typeMeta = TYPE_META[evt.type] || TYPE_META.event;
-                    return (
-                      <button
-                        key={`upcoming-${evt.id}`}
-                        type="button"
-                        className={`dashboard-calendar-upcoming-row type-${evt.type}${selectedEvent?.id === evt.id ? " active" : ""}`}
-                        onClick={() => {
-                          setSelectedDateKey(evt.date);
-                          setSelectedEventId(evt.id);
-                        }}
-                      >
-                        <div className="dashboard-calendar-upcoming-row-icon">
-                          <i className={`bi ${typeMeta.icon}`}></i>
-                        </div>
-                        <div className="dashboard-calendar-upcoming-row-copy">
-                          <strong>{evt.title}</strong>
-                          <span>{formatAgendaDate(evt.dateObject, evt.time)}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="dashboard-calendar-empty compact">
-                  No upcoming events in this month yet.
-                </div>
-              )}
-            </div>
-          </aside>
         </div>
       </div>
     </section>

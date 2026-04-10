@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&display=swap");
+
 *,
 *::before,
 *::after {
@@ -12,7 +14,20 @@ body,
 
 body {
   margin: 0;
-  color: var(--app-text-primary);
-  background: var(--app-surface);
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--app-text-primary, #F4F4F5);
+  background: var(--app-surface, #0C0C0D);
 }
 
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover,
+a:focus-visible {
+  color: inherit;
+  text-decoration: none;
+}

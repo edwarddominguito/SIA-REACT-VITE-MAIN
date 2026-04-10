@@ -47,6 +47,33 @@ const REAL_ESTATE_IMAGE_POOL = [
 
 const LEGACY_IMAGE_SET = new Set(PREVIOUS_AUTO_IMAGE_POOL);
 const AUTO_IMAGE_MAP_KEY = "propertyAutoImageMapV2";
+const IMAGE_FILE_EXTENSION_RE = /\.(png|jpe?g|webp|gif|avif|svg)(?:[?#].*)?$/i;
+const PROPERTY_ASSET_IMAGES = import.meta.glob("../assets/images/*.{png,jpg,jpeg,webp,gif,avif,svg}", {
+  eager: true,
+  import: "default"
+});
+const PROPERTY_ASSET_IMAGE_MAP = new Map();
+const PROPERTY_ASSET_IMAGE_NAMES = [];
+
+Object.entries(PROPERTY_ASSET_IMAGES).forEach(([sourcePath, assetUrl]) => {
+  const normalizedSourcePath = String(sourcePath || "").replace(/\\/g, "/");
+  const filename = normalizedSourcePath.split("/").pop() || "";
+  const normalizedAssetUrl = String(assetUrl || "").trim();
+  if (!filename || !normalizedAssetUrl) return;
+
+  PROPERTY_ASSET_IMAGE_NAMES.push(filename);
+  const candidates = [
+    filename,
+    `assets/images/${filename}`,
+    `src/assets/images/${filename}`,
+    normalizedSourcePath.replace(/^\.\.\//, "")
+  ];
+  candidates.forEach((candidate) => {
+    PROPERTY_ASSET_IMAGE_MAP.set(candidate.toLowerCase(), normalizedAssetUrl);
+  });
+});
+
+export const propertyAssetImageNames = Array.from(new Set(PROPERTY_ASSET_IMAGE_NAMES)).sort((a, b) => a.localeCompare(b));
 
 const isUsableImageUrl = (value) => {
   const candidate = String(value || "").trim();
@@ -62,8 +89,43 @@ const isUsableImageUrl = (value) => {
     normalized.startsWith("https://") ||
     normalized.startsWith("data:image/") ||
     normalized.startsWith("blob:") ||
-    normalized.startsWith("/")
+    (normalized.startsWith("/") && IMAGE_FILE_EXTENSION_RE.test(candidate))
   );
+};
+
+export const resolvePropertyImageSource = (value) => {
+  const candidate = String(value || "").trim().replace(/\\/g, "/");
+  if (!candidate) return "";
+  if (/^(https?:\/\/|data:image\/|blob:)/i.test(candidate)) return candidate;
+  if (candidate.startsWith("/")) {
+    return IMAGE_FILE_EXTENSION_RE.test(candidate) ? candidate : "";
+  }
+
+  const normalized = candidate.replace(/^\.\/+/, "").replace(/^\/+/, "");
+  const bundled = PROPERTY_ASSET_IMAGE_MAP.get(normalized.toLowerCase()) || PROPERTY_ASSET_IMAGE_MAP.get((normalized.split("/").pop() || "").toLowerCase());
+  if (bundled) return bundled;
+  if (!IMAGE_FILE_EXTENSION_RE.test(normalized)) return "";
+  if (normalized.startsWith("property-images/")) return `/${normalized}`;
+  if (!normalized.includes("/")) return `/property-images/${normalized}`;
+  return `/${normalized}`;
+};
+
+export const propertyCoverImage = (property) => {
+  const explicitCover = resolvePropertyImageSource(property?.imageUrl);
+  if (explicitCover && !LEGACY_IMAGE_SET.has(explicitCover) && isUsableImageUrl(explicitCover)) {
+    return explicitCover;
+  }
+
+  if (Array.isArray(property?.imageUrls)) {
+    for (const candidate of property.imageUrls) {
+      const resolved = resolvePropertyImageSource(candidate);
+      if (resolved && !LEGACY_IMAGE_SET.has(resolved) && isUsableImageUrl(resolved)) {
+        return resolved;
+      }
+    }
+  }
+
+  return autoPropertyImage(property);
 };
 
 export const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0 });
@@ -77,6 +139,12 @@ const STATUS_LABELS = {
   declined: "Declined",
   no_show: "No-show",
   expired: "Expired"
+};
+
+const APPOINTMENT_TYPE_LABELS = {
+  property_viewing: "Property Viewing",
+  virtual_tour: "Virtual Tour",
+  consultation: "Consultation"
 };
 
 export const normalizeWorkflowStatus = (statusLike, kind = "generic") => {
@@ -120,16 +188,24 @@ export const normalizePropertyStatus = (statusLike) => {
   return "available";
 };
 
+export const isDisplayableProperty = (propertyLike) => {
+  const normalized = normalizePropertyStatus(propertyLike?.propertyStatus || propertyLike?.status);
+  return normalized !== "archived";
+};
+
 export const propertyPriceLabel = (propertyLike) => {
-  const listingType = normalizeListingType(propertyLike?.listingType, propertyLike);
-  const prefix = `PHP ${money(propertyLike?.price)}`;
-  return listingType === "rent" ? `${prefix}/month` : prefix;
+  return `PHP ${money(propertyLike?.price)}`;
 };
 
 export const listingTypeLabel = (propertyLike) => normalizeListingType(propertyLike?.listingType, propertyLike) === "rent" ? "For Rent" : "For Sale";
 export const propertyStatusLabel = (propertyLike) => {
   const normalized = normalizePropertyStatus(propertyLike?.propertyStatus || propertyLike?.status);
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+export const appointmentTypeLabel = (typeLike) => {
+  const normalized = String(typeLike || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return APPOINTMENT_TYPE_LABELS[normalized] || "Property Viewing";
 };
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -350,22 +426,54 @@ export const applyPropertyImageFallback = (image, property) => {
   }
 };
 
+export const propertyGalleryImages = (property, { includeCover = true } = {}) => {
+  const images = [];
+  const seen = new Set();
+  const push = (candidate) => {
+    const cleaned = resolvePropertyImageSource(candidate);
+    if (!cleaned || seen.has(cleaned) || LEGACY_IMAGE_SET.has(cleaned) || !isUsableImageUrl(cleaned)) return;
+    seen.add(cleaned);
+    images.push(cleaned);
+  };
+
+  const coverImage = propertyCoverImage(property);
+  if (includeCover) {
+    push(coverImage);
+  } else if (coverImage) {
+    seen.add(coverImage);
+  }
+  if (Array.isArray(property?.imageUrls)) {
+    property.imageUrls.forEach(push);
+  }
+
+  if (!images.length) {
+    images.push(autoPropertyImage(property));
+  }
+
+  return images.slice(0, includeCover ? 5 : 4);
+};
+
 export const withImage = (property) => {
-  const candidate = String(property?.imageUrl || "").trim();
-  if (candidate && !LEGACY_IMAGE_SET.has(candidate) && isUsableImageUrl(candidate)) return candidate;
-  return autoPropertyImage(property);
+  return propertyCoverImage(property) || autoPropertyImage(property);
 };
 
 export const resolveAppointmentImage = (appointment, properties = []) => {
-  const explicit = String(appointment?.propertyImage || "").trim();
-  if (explicit) return explicit;
-  const matchedProperty = properties.find((p) => String(p.id) === String(appointment?.propertyId));
+  const explicit = resolvePropertyImageSource(appointment?.propertyImage);
+  if (explicit && !LEGACY_IMAGE_SET.has(explicit) && isUsableImageUrl(explicit)) {
+    return explicit;
+  }
+
+  const matchedProperty =
+    properties.find((p) => String(p.id) === String(appointment?.propertyId)) ||
+    properties.find((p) => p.title === appointment?.propertyTitle && p.location === appointment?.location);
+
   return withImage(
     matchedProperty || {
       id: appointment?.propertyId,
       title: appointment?.propertyTitle,
       location: appointment?.location,
-      imageUrl: ""
+      imageUrl: appointment?.imageUrl || "",
+      imageUrls: Array.isArray(appointment?.imageUrls) ? appointment.imageUrls : []
     }
   );
 };

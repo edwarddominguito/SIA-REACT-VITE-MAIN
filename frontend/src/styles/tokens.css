@@ -1,8 +1,23 @@
 :root {
-  --app-surface: #f7f8fc;
-  --app-surface-muted: #f0f2f5;
-  --app-border-soft: rgba(15, 23, 42, 0.1);
-  --app-text-primary: #111827;
-  --app-text-muted: #64748b;
+  --app-surface: #f5f5f5;
+  --app-surface-muted: #fafafa;
+  --app-border-soft: #e4e4e7;
+  --app-text-primary: #18181b;
+  --app-text-muted: #52525b;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --space-8: 64px;
+  --space-12: 96px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --container-max: 1280px;
 }
 

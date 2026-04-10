@@ -5,7 +5,6 @@ This is a React+Vite conversion of your LocalStorage-based SIA TES Property UI.
 ## Folder structure
 - `frontend/` React + Vite app
 - `backend/` Express server (optional) to serve the built `frontend/dist`
-- `supabase/` Supabase setup notes and SQL migrations
 - `docs/refactor-baseline.md` route matrix and parity checklist for safe refactors
 
 ## Architecture (refactor baseline)
@@ -36,27 +35,20 @@ npm install
 npm run dev
 ```
 
-## Google Sign-In setup (Supabase)
+## Google Sign-In setup (Direct Google Identity)
 1. Copy env templates:
 ```bash
 copy frontend\\.env.example frontend\\.env
 copy backend\\.env.example backend\\.env
 ```
 2. In `frontend/.env`, set:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+- `VITE_GOOGLE_CLIENT_ID`
 3. In `backend/.env`, set:
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-4. In Supabase Dashboard:
-- `Authentication -> Providers -> Google`:
-  - Enable Google provider.
-  - Set your Google OAuth Client ID and Client Secret.
-- `Authentication -> URL Configuration`:
-  - Add `http://localhost:5173/auth/callback` to Redirect URLs.
-5. In Google Cloud OAuth client:
-- Authorized JavaScript origin: `http://localhost:5173`
-- Authorized redirect URI: `https://jtstkfpzrhjbqqkfmtvw.supabase.co/auth/v1/callback`
+- `GOOGLE_CLIENT_ID`
+4. In Google Cloud OAuth client:
+  - Authorized JavaScript origin: `http://localhost:5173`
+  - Add your deployed frontend origin too if you plan to use Vercel.
+5. Keep the same Google client ID in both frontend and backend env files.
 
 ### Demo accounts
 - admin / admin123
@@ -75,3 +67,33 @@ npm start
 ```
 
 Open http://localhost:3000
+
+## Backend Serve With Fresh Frontend Build (Recommended for UI QA)
+```bash
+cd backend
+npm install
+npm run start:latest-ui
+```
+
+This command always rebuilds `frontend/dist` before starting Express so backend-served UI tests use the latest CSS/JS assets.
+
+## UI Refactor QA Quick Checklist
+- Build frontend only:
+```bash
+cd frontend
+npm run build
+```
+- Build+serve through backend (recommended for final visual verification):
+```bash
+cd backend
+npm run start:latest-ui
+```
+- Smoke routes:
+  - `/`
+  - `/properties/:id`
+  - `/customer/book-appointment`
+  - `/customer/dashboard`
+  - `/agent`
+  - `/admin`
+  - `/admin/add-user`
+  - Dashboard `messages` and `calendar` tabs

@@ -111,13 +111,34 @@ let cachedDb = null;
 let updateQueue = Promise.resolve();
 const idempotencyStore = new Map();
 let schemaReadyPromise = null;
+const startupRuntimeState = {
+  attempted: false,
+  phase: "pending",
+  ready: false,
+  lastError: null,
+  lastAttemptAt: "",
+  lastSuccessAt: ""
+};
 let googleCalendarTokenCache = { accessToken: "", expiresAt: 0 };
 let googleCalendarMetadataCache = { calendarId: "", requestedTimeZone: "", remoteTimeZone: "", checkedAt: 0 };
 const messageStreamClients = new Map();
 let nextMessageStreamClientId = 0;
+const PROPERTY_IMAGE_EXTENSION_RE = /\.(png|jpe?g|webp|gif|avif|svg)(?:[?#].*)?$/i;
+
+const isLikelyPropertyImageReference = (value) => {
+  const candidate = clean(value, 1000);
+  if (!candidate) return false;
+  if (/^(https?:\/\/|data:image\/|blob:)/i.test(candidate)) return true;
+  if (candidate.startsWith("/")) return PROPERTY_IMAGE_EXTENSION_RE.test(candidate);
+  return PROPERTY_IMAGE_EXTENSION_RE.test(candidate);
+};
 
 const validateStartupConfig = async () => {
   validateDbConfigOrThrow();
+};
+
+const ensurePostgresColumn = async (tableName, columnName, definition) => {
+  await dbPool.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS ${columnName} ${definition}`);
 };
 
 const ensurePostgresSchema = async () => {
@@ -152,6 +173,7 @@ const ensurePostgresSchema = async () => {
       area_sqft INT NULL,
       description TEXT NULL,
       image_url TEXT NULL,
+      image_urls_json JSON NULL,
       status VARCHAR(30) NOT NULL DEFAULT 'available',
       listing_type VARCHAR(20) NOT NULL DEFAULT 'sale',
       property_type VARCHAR(40) NOT NULL DEFAULT 'house',
@@ -162,6 +184,7 @@ const ensurePostgresSchema = async () => {
       updated_at TIMESTAMP NULL
     );
   `);
+  await dbPool.query("ALTER TABLE properties ADD COLUMN IF NOT EXISTS image_urls_json JSON NULL");
 
   await dbPool.query(`
     CREATE TABLE IF NOT EXISTS appointments (
@@ -172,6 +195,10 @@ const ensurePostgresSchema = async () => {
       assigned_by_admin_user_id VARCHAR(64) NULL REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE,
       appointment_date DATE NOT NULL,
       appointment_time TIME NOT NULL,
+      appointment_type VARCHAR(40) NOT NULL DEFAULT 'property_viewing',
+      contact_full_name VARCHAR(90) NULL,
+      contact_email VARCHAR(120) NULL,
+      contact_phone VARCHAR(30) NULL,
       status VARCHAR(30) NOT NULL DEFAULT 'pending',
       notes TEXT NULL,
       outcome_notes TEXT NULL,
@@ -332,6 +359,83 @@ const ensurePostgresSchema = async () => {
     );
   `);
 
+  // Existing Postgres databases may predate newer fields that current queries expect.
+  await ensurePostgresColumn("users", "photo_url", "TEXT NULL");
+  await ensurePostgresColumn("users", "account_status", "VARCHAR(20) NOT NULL DEFAULT 'active'");
+  await ensurePostgresColumn("users", "availability_status", "VARCHAR(20) NOT NULL DEFAULT 'available'");
+  await ensurePostgresColumn("users", "last_active_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("users", "deactivated_at", "TIMESTAMP NULL");
+
+  await ensurePostgresColumn("properties", "listing_type", "VARCHAR(20) NOT NULL DEFAULT 'sale'");
+  await ensurePostgresColumn("properties", "property_type", "VARCHAR(40) NOT NULL DEFAULT 'house'");
+  await ensurePostgresColumn("properties", "property_status", "VARCHAR(20) NOT NULL DEFAULT 'available'");
+  await ensurePostgresColumn("properties", "image_urls_json", "JSON NULL");
+  await ensurePostgresColumn("properties", "archived_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("properties", "archived_by_user_id", "VARCHAR(64) NULL");
+
+  await ensurePostgresColumn("appointments", "completed_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("appointments", "cancelled_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("appointments", "rescheduled_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("appointments", "expired_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("appointments", "appointment_type", "VARCHAR(40) NOT NULL DEFAULT 'property_viewing'");
+  await ensurePostgresColumn("appointments", "contact_full_name", "VARCHAR(90) NULL");
+  await ensurePostgresColumn("appointments", "contact_email", "VARCHAR(120) NULL");
+  await ensurePostgresColumn("appointments", "contact_phone", "VARCHAR(30) NULL");
+  await ensurePostgresColumn("appointments", "outcome_notes", "TEXT NULL");
+  await ensurePostgresColumn("appointments", "cancel_reason", "TEXT NULL");
+  await ensurePostgresColumn("appointments", "no_show_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("appointments", "google_event_id", "VARCHAR(255) NULL");
+  await ensurePostgresColumn("appointments", "google_html_link", "TEXT NULL");
+  await ensurePostgresColumn("appointments", "google_sync_status", "VARCHAR(20) NOT NULL DEFAULT 'pending'");
+  await ensurePostgresColumn("appointments", "google_sync_error", "TEXT NULL");
+  await ensurePostgresColumn("appointments", "google_synced_at", "TIMESTAMP NULL");
+
+  await ensurePostgresColumn("office_meets", "phone", "VARCHAR(30) NULL");
+  await ensurePostgresColumn("office_meets", "related_property_id", "VARCHAR(64) NULL");
+  await ensurePostgresColumn("office_meets", "notes", "TEXT NULL");
+  await ensurePostgresColumn("office_meets", "outcome_notes", "TEXT NULL");
+  await ensurePostgresColumn("office_meets", "completed_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("office_meets", "cancelled_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("office_meets", "rescheduled_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("office_meets", "expired_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("office_meets", "no_show_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("office_meets", "google_event_id", "VARCHAR(255) NULL");
+  await ensurePostgresColumn("office_meets", "google_html_link", "TEXT NULL");
+  await ensurePostgresColumn("office_meets", "google_sync_status", "VARCHAR(20) NOT NULL DEFAULT 'pending'");
+  await ensurePostgresColumn("office_meets", "google_sync_error", "TEXT NULL");
+  await ensurePostgresColumn("office_meets", "google_synced_at", "TIMESTAMP NULL");
+
+  await ensurePostgresColumn("trips", "title", "VARCHAR(120) NULL");
+  await ensurePostgresColumn("trips", "location", "VARCHAR(140) NULL");
+  await ensurePostgresColumn("trips", "attendees_json", "JSON NULL");
+  await ensurePostgresColumn("trips", "completed_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("trips", "cancelled_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("trips", "rescheduled_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("trips", "expired_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("trips", "outcome_notes", "TEXT NULL");
+  await ensurePostgresColumn("trips", "google_event_id", "VARCHAR(255) NULL");
+  await ensurePostgresColumn("trips", "google_html_link", "TEXT NULL");
+  await ensurePostgresColumn("trips", "google_sync_status", "VARCHAR(20) NOT NULL DEFAULT 'pending'");
+  await ensurePostgresColumn("trips", "google_sync_error", "TEXT NULL");
+  await ensurePostgresColumn("trips", "google_synced_at", "TIMESTAMP NULL");
+
+  await ensurePostgresColumn("notifications", "appointment_id", "VARCHAR(64) NULL");
+  await ensurePostgresColumn("notifications", "office_meet_id", "VARCHAR(64) NULL");
+  await ensurePostgresColumn("notifications", "type", "VARCHAR(60) NOT NULL DEFAULT 'general'");
+  await ensurePostgresColumn("notifications", "title", "VARCHAR(120) NOT NULL DEFAULT 'Notification'");
+  await ensurePostgresColumn("notifications", "meta", "JSON NULL");
+  await ensurePostgresColumn("notifications", "read_at", "TIMESTAMP NULL");
+
+  await ensurePostgresColumn("messages", "direction", "VARCHAR(20) NOT NULL DEFAULT 'outbound'");
+  await ensurePostgresColumn("messages", "channel", "VARCHAR(20) NOT NULL DEFAULT 'app'");
+  await ensurePostgresColumn("messages", "provider", "VARCHAR(30) NOT NULL DEFAULT 'internal'");
+  await ensurePostgresColumn("messages", "provider_message_id", "VARCHAR(128) NULL");
+  await ensurePostgresColumn("messages", "provider_status", "VARCHAR(30) NOT NULL DEFAULT 'pending'");
+  await ensurePostgresColumn("messages", "error_message", "TEXT NULL");
+  await ensurePostgresColumn("messages", "meta", "JSON NULL");
+  await ensurePostgresColumn("messages", "read_at", "TIMESTAMP NULL");
+  await ensurePostgresColumn("messages", "updated_at", "TIMESTAMP NULL");
+
   await dbPool.query("CREATE INDEX IF NOT EXISTS idx_properties_agent_user_id ON properties(agent_user_id)");
   await dbPool.query("CREATE INDEX IF NOT EXISTS idx_properties_archived_at ON properties(archived_at)");
 
@@ -446,6 +550,7 @@ const ensureDbSchema = async () => {
       area_sqft INT NULL,
       description TEXT NULL,
       image_url TEXT NULL,
+      image_urls_json JSON NULL,
       status VARCHAR(30) NOT NULL DEFAULT 'available',
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -464,6 +569,10 @@ const ensureDbSchema = async () => {
       assigned_by_admin_user_id VARCHAR(64) NULL,
       appointment_date DATE NOT NULL,
       appointment_time TIME NOT NULL,
+      appointment_type VARCHAR(40) NOT NULL DEFAULT 'property_viewing',
+      contact_full_name VARCHAR(90) NULL,
+      contact_email VARCHAR(120) NULL,
+      contact_phone VARCHAR(30) NULL,
       status ENUM('pending','approved','rescheduled','done','declined','cancelled') NOT NULL DEFAULT 'pending',
       notes TEXT NULL,
       assigned_at DATETIME NULL,
@@ -688,6 +797,7 @@ const ensureDbSchema = async () => {
   await ensureColumn("properties", "listing_type", "VARCHAR(20) NOT NULL DEFAULT 'sale'");
   await ensureColumn("properties", "property_type", "VARCHAR(40) NOT NULL DEFAULT 'house'");
   await ensureColumn("properties", "property_status", "VARCHAR(20) NOT NULL DEFAULT 'available'");
+  await ensureColumn("properties", "image_urls_json", "JSON NULL");
   await ensureColumn("properties", "archived_at", "DATETIME NULL");
   await ensureColumn("properties", "archived_by_user_id", "VARCHAR(64) NULL");
 
@@ -695,6 +805,10 @@ const ensureDbSchema = async () => {
   await ensureColumn("appointments", "cancelled_at", "DATETIME NULL");
   await ensureColumn("appointments", "rescheduled_at", "DATETIME NULL");
   await ensureColumn("appointments", "expired_at", "DATETIME NULL");
+  await ensureColumn("appointments", "appointment_type", "VARCHAR(40) NOT NULL DEFAULT 'property_viewing'");
+  await ensureColumn("appointments", "contact_full_name", "VARCHAR(90) NULL");
+  await ensureColumn("appointments", "contact_email", "VARCHAR(120) NULL");
+  await ensureColumn("appointments", "contact_phone", "VARCHAR(30) NULL");
   await ensureColumn("appointments", "outcome_notes", "TEXT NULL");
   await ensureColumn("appointments", "cancel_reason", "TEXT NULL");
   await ensureColumn("appointments", "no_show_at", "DATETIME NULL");
@@ -753,6 +867,67 @@ const normalizeRecordCollection = (value) =>
   normalizeCollection(value).filter((item) => item && typeof item === "object" && !Array.isArray(item));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const clean = (value, max = 200) => String(value ?? "").trim().slice(0, max);
+const toStartupError = (errorLike) =>
+  errorLike instanceof Error ? errorLike : new Error(String(errorLike || "Unknown startup error"));
+const markStartupAttempt = (phase) => {
+  startupRuntimeState.attempted = true;
+  startupRuntimeState.phase = clean(phase || "startup", 60) || "startup";
+  startupRuntimeState.lastAttemptAt = new Date().toISOString();
+};
+const markStartupReady = () => {
+  startupRuntimeState.phase = "ready";
+  startupRuntimeState.ready = true;
+  startupRuntimeState.lastError = null;
+  startupRuntimeState.lastSuccessAt = new Date().toISOString();
+};
+const markStartupFailure = (errorLike) => {
+  const error = toStartupError(errorLike);
+  startupRuntimeState.phase = clean(error?.startupPhase || "startup", 60) || "startup";
+  startupRuntimeState.ready = false;
+  startupRuntimeState.lastError = error;
+  startupRuntimeState.lastAttemptAt = new Date().toISOString();
+  return error;
+};
+const buildStartupHealthPayload = ({ scope = "app" } = {}) => {
+  const error = startupRuntimeState.lastError;
+  return {
+    ok: true,
+    service: scope,
+    time: new Date().toISOString(),
+    uptimeSeconds: Number(process.uptime().toFixed(0)),
+    startup: {
+      attempted: startupRuntimeState.attempted,
+      phase: startupRuntimeState.phase,
+      ready: startupRuntimeState.ready,
+      degraded: Boolean(error),
+      lastAttemptAt: startupRuntimeState.lastAttemptAt || null,
+      lastSuccessAt: startupRuntimeState.lastSuccessAt || null
+    },
+    database: {
+      client: DB_CLIENT,
+      ready: startupRuntimeState.ready,
+      endpoint: env.db.connectionString ? "configured" : `${env.db.host}:${env.db.port}`
+    },
+    error: error
+      ? {
+          phase: clean(error?.startupPhase || startupRuntimeState.phase, 60) || "startup",
+          message: clean(error?.message || "Startup failed.", 300),
+          hint: error?.hint ? clean(error.hint, 500) : "",
+          details: error?.details || null
+        }
+      : null
+  };
+};
+const buildServiceUnavailablePayload = () => {
+  const error = startupRuntimeState.lastError;
+  return {
+    ok: false,
+    message: "API is running in degraded mode because the database is unavailable.",
+    startupPhase: startupRuntimeState.phase,
+    hint: error?.hint ? clean(error.hint, 500) : "Check the database connection and try again.",
+    details: error?.details || null
+  };
+};
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATE_PREFIX_RE = /^(\d{4}-\d{2}-\d{2})(?:[T\s].*)?$/;
 const formatLocalDateOnly = (value) => {
@@ -1206,6 +1381,41 @@ const sanitizePropertyRecord = (value) => {
   const property = ensureObject(value);
   const listingType = normalizeListingType(property.listingType, property);
   const propertyType = normalizePropertyType(property.propertyType, property);
+  const rawImageUrls = Array.isArray(property.imageUrls)
+    ? property.imageUrls
+    : typeof property.imageUrls === "string"
+      ? (() => {
+        const candidate = clean(property.imageUrls, 8000);
+        if (!candidate) return [];
+        if (!candidate.startsWith("[")) return [candidate];
+        try {
+          const parsed = JSON.parse(candidate);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })()
+      : [];
+  const seenImages = new Set();
+  const cleanImage = (candidate) => {
+    const cleanedImage = clean(candidate, 1000);
+    if (!cleanedImage || !isLikelyPropertyImageReference(cleanedImage) || seenImages.has(cleanedImage)) return "";
+    seenImages.add(cleanedImage);
+    return cleanedImage;
+  };
+
+  let primaryImageUrl = cleanImage(property.imageUrl);
+  const galleryCandidates = [];
+  rawImageUrls.forEach((candidate) => {
+    const cleaned = cleanImage(candidate);
+    if (cleaned) galleryCandidates.push(cleaned);
+  });
+
+  if (!primaryImageUrl && galleryCandidates.length) {
+    primaryImageUrl = galleryCandidates.shift() || "";
+  }
+
+  const imageUrls = galleryCandidates.filter((candidate) => candidate !== primaryImageUrl).slice(0, 4);
   return {
     ...property,
     id: clean(property.id, 64),
@@ -1216,7 +1426,8 @@ const sanitizePropertyRecord = (value) => {
     bathrooms: Number.isFinite(Number(property.bathrooms)) ? Math.max(0, Math.trunc(Number(property.bathrooms))) : null,
     areaSqft: Number.isFinite(Number(property.areaSqft)) ? Math.max(0, Math.trunc(Number(property.areaSqft))) : null,
     description: clean(property.description, 1200),
-    imageUrl: clean(property.imageUrl, 1000),
+    imageUrl: primaryImageUrl,
+    imageUrls,
     agent: clean(property.agent, 50),
     listingType,
     propertyType,
@@ -1227,6 +1438,19 @@ const sanitizePropertyRecord = (value) => {
     createdAt: toIso(property.createdAt),
     updatedAt: toIso(property.updatedAt)
   };
+};
+
+const persistablePropertyImageUrl = (value) => {
+  const candidate = String(value || "").trim();
+  if (!candidate) return null;
+  if (candidate.startsWith("data:image/")) return null;
+  return clean(candidate, 1000) || null;
+};
+
+const normalizeAppointmentType = (value) => {
+  const raw = clean(value, 40).toLowerCase().replace(/[\s-]+/g, "_");
+  if (raw === "virtual_tour" || raw === "consultation") return raw;
+  return "property_viewing";
 };
 
 const sanitizeAppointmentRecord = (value) => {
@@ -1244,6 +1468,10 @@ const sanitizeAppointmentRecord = (value) => {
     assignedByAdmin: clean(appointment.assignedByAdmin, 50),
     date: toIsoDateOnly(appointment.date),
     time: toSqlTime(appointment.time)?.slice(0, 5) || "",
+    appointmentType: normalizeAppointmentType(appointment.appointmentType),
+    contactFullName: clean(appointment.contactFullName, 90),
+    contactEmail: clean(appointment.contactEmail, 120).toLowerCase(),
+    contactPhone: clean(appointment.contactPhone, 30),
     status: normalizeAppointmentStatus(appointment.status),
     notes: clean(appointment.notes, 1500),
     outcomeNotes: clean(appointment.outcomeNotes, 1500),
@@ -1549,7 +1777,7 @@ const loadDb = async ({ forceReload = false } = {}) => {
   const idToUsername = new Map(usersRows.map((u) => [String(u.id), String(u.username)]));
 
   const [propertiesRows] = await dbPool.query(`
-    SELECT p.id, p.title, p.location, p.price, p.bedrooms, p.bathrooms, p.area_sqft, p.description, p.image_url, p.status,
+    SELECT p.id, p.title, p.location, p.price, p.bedrooms, p.bathrooms, p.area_sqft, p.description, p.image_url, p.image_urls_json, p.status,
            p.listing_type, p.property_type, p.property_status, p.archived_at, p.archived_by_user_id,
            p.created_at, p.updated_at, p.agent_user_id, au.username AS agent_username, ab.username AS archived_by_username
     FROM properties p
@@ -1560,12 +1788,14 @@ const loadDb = async ({ forceReload = false } = {}) => {
 
   const [appointmentsRows] = await dbPool.query(`
     SELECT a.id, a.property_id, a.customer_user_id, a.assigned_agent_user_id, a.assigned_by_admin_user_id,
-           a.appointment_date, a.appointment_time, a.status, a.notes, a.outcome_notes, a.cancel_reason, a.assigned_at,
+           a.appointment_date, a.appointment_time, a.appointment_type, a.contact_full_name, a.contact_email, a.contact_phone,
+           a.status, a.notes, a.outcome_notes, a.cancel_reason, a.assigned_at,
            a.completed_at, a.cancelled_at, a.rescheduled_at, a.expired_at, a.no_show_at,
            a.google_event_id, a.google_html_link, a.google_sync_status, a.google_sync_error, a.google_synced_at,
            a.created_at, a.updated_at,
            p.title AS property_title, p.location AS property_location, p.image_url AS property_image,
-           cu.username AS customer_username, au.username AS assigned_agent_username, ad.username AS assigned_by_admin_username
+           cu.username AS customer_username, cu.full_name AS customer_full_name, cu.email AS customer_email, cu.phone AS customer_phone,
+           au.username AS assigned_agent_username, ad.username AS assigned_by_admin_username
     FROM appointments a
     LEFT JOIN properties p ON p.id = a.property_id
     LEFT JOIN users cu ON cu.id = a.customer_user_id
@@ -1658,6 +1888,11 @@ const loadDb = async ({ forceReload = false } = {}) => {
       areaSqft: p.area_sqft ?? null,
       description: p.description || "",
       imageUrl: p.image_url || "",
+      imageUrls: typeof p.image_urls_json === "string"
+        ? (() => {
+          try { return JSON.parse(p.image_urls_json); } catch { return []; }
+        })()
+        : p.image_urls_json,
       status: p.status || p.property_status || "available",
       propertyStatus: p.property_status || p.status || "available",
       listingType: p.listing_type || "",
@@ -1680,6 +1915,10 @@ const loadDb = async ({ forceReload = false } = {}) => {
       assignedByAdmin: a.assigned_by_admin_username || "",
       date: toIsoDateOnly(a.appointment_date),
       time: a.appointment_time ? String(a.appointment_time).slice(0, 5) : "",
+      appointmentType: a.appointment_type || "property_viewing",
+      contactFullName: a.contact_full_name || a.customer_full_name || "",
+      contactEmail: a.contact_email || a.customer_email || "",
+      contactPhone: a.contact_phone || a.customer_phone || "",
       status: a.status || "pending",
       notes: a.notes || "",
       outcomeNotes: a.outcome_notes || "",
@@ -1884,8 +2123,8 @@ const saveDb = async (nextDb) => {
       if (!id || !title || !location) continue;
       const agentUserId = resolveUserId(p?.agent || p?.agentUserId);
       await conn.query(
-        `INSERT INTO properties (id, agent_user_id, title, location, price, bedrooms, bathrooms, area_sqft, description, image_url, status, listing_type, property_type, property_status, archived_at, archived_by_user_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO properties (id, agent_user_id, title, location, price, bedrooms, bathrooms, area_sqft, description, image_url, image_urls_json, status, listing_type, property_type, property_status, archived_at, archived_by_user_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           agentUserId,
@@ -1896,7 +2135,8 @@ const saveDb = async (nextDb) => {
           Number.isFinite(Number(p?.bathrooms)) ? Number(p.bathrooms) : null,
           Number.isFinite(Number(p?.areaSqft)) ? Number(p.areaSqft) : null,
           clean(p?.description, 1200) || null,
-          clean(p?.imageUrl, 1000) || null,
+          persistablePropertyImageUrl(p?.imageUrl),
+          Array.isArray(p?.imageUrls) && p.imageUrls.length ? JSON.stringify(p.imageUrls) : null,
           normalizePropertyStatus(p?.propertyStatus || p?.status),
           normalizeListingType(p?.listingType, p),
           normalizePropertyType(p?.propertyType, p),
@@ -1969,8 +2209,8 @@ const saveDb = async (nextDb) => {
       const assignedAgentUserId = resolveUserId(a?.assignedAgent || a?.agent);
       const assignedByAdminUserId = resolveUserId(a?.assignedByAdmin);
       await conn.query(
-        `INSERT INTO appointments (id, property_id, customer_user_id, assigned_agent_user_id, assigned_by_admin_user_id, appointment_date, appointment_time, status, notes, outcome_notes, cancel_reason, assigned_at, completed_at, cancelled_at, rescheduled_at, expired_at, no_show_at, google_event_id, google_html_link, google_sync_status, google_sync_error, google_synced_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO appointments (id, property_id, customer_user_id, assigned_agent_user_id, assigned_by_admin_user_id, appointment_date, appointment_time, appointment_type, contact_full_name, contact_email, contact_phone, status, notes, outcome_notes, cancel_reason, assigned_at, completed_at, cancelled_at, rescheduled_at, expired_at, no_show_at, google_event_id, google_html_link, google_sync_status, google_sync_error, google_synced_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           propertyId,
@@ -1979,6 +2219,10 @@ const saveDb = async (nextDb) => {
           assignedByAdminUserId,
           appointmentDate,
           appointmentTime,
+          normalizeAppointmentType(a?.appointmentType),
+          clean(a?.contactFullName, 90) || null,
+          clean(a?.contactEmail, 120) || null,
+          clean(a?.contactPhone, 30) || null,
           normalizeAppointmentStatus(a?.status),
           clean(a?.notes, 1500) || null,
           clean(a?.outcomeNotes, 1500) || null,
@@ -3029,9 +3273,16 @@ const mergeUsersForContext = (existingUsers, incomingUsers, context) => {
 };
 const scopeStateForContext = (db, context) => ({
   allUsers: scopeUsersForContext(db.users, context),
-  allProperties: normalizeRecordCollection(!hasRequestUserContext(context) || isAdminContext(context) || context.role === "customer"
-    ? db.properties
-    : db.properties.filter((property) => canManageProperty(property, context))).map((property) => sanitizePropertyRecord(property)),
+  allProperties: normalizeRecordCollection(
+    (!hasRequestUserContext(context) || isAdminContext(context) || context.role === "customer")
+      ? (!isAdminContext(context)
+          ? db.properties.filter((property) => normalizePropertyStatus(property?.propertyStatus || property?.status) !== "archived")
+          : db.properties)
+      : db.properties.filter((property) => (
+          canManageProperty(property, context) &&
+          normalizePropertyStatus(property?.propertyStatus || property?.status) !== "archived"
+        ))
+  ).map((property) => sanitizePropertyRecord(property)),
   allAppointments: normalizeRecordCollection(db.appointments).filter((appointment) => canAccessAppointment(appointment, context)).map((appointment) => sanitizeAppointmentRecord(appointment)),
   officeMeets: normalizeRecordCollection(db.officeMeets).filter((meet) => canAccessOfficeMeet(meet, context)).map((meet) => sanitizeOfficeMeetRecord(meet)),
   allReviews: normalizeRecordCollection(db.reviews).filter((review) => canAccessReview(review, context)).map((review) => ({ ...review })),
@@ -3775,7 +4026,7 @@ const routeDeps = {
   isPastSchedule
 };
 
-registerHealthRoutes(api);
+registerHealthRoutes(api, buildStartupHealthPayload);
 registerAuthRoutes(api, routeDeps);
 registerStateRoutes(api, routeDeps);
 registerUserRoutes(api, routeDeps);
@@ -3802,8 +4053,16 @@ let startupBootstrapPromise = null;
 const ensureStartupBootstrap = async () => {
   if (!startupBootstrapPromise) {
     startupBootstrapPromise = (async () => {
-      for (const step of startupBootstrapSteps) {
-        await step();
+      markStartupAttempt("bootstrapping");
+      try {
+        for (const step of startupBootstrapSteps) {
+          await step();
+        }
+        markStartupReady();
+        return true;
+      } catch (error) {
+        markStartupFailure(error);
+        return false;
       }
     })();
   }
@@ -3812,14 +4071,22 @@ const ensureStartupBootstrap = async () => {
 
 if (isVercelRuntime) {
   app.use(async (req, res, next) => {
-    try {
-      await ensureStartupBootstrap();
-      next();
-    } catch (error) {
-      next(error);
+    const bootstrapped = await ensureStartupBootstrap();
+    if (!bootstrapped && req.path !== "/health") {
+      return res.status(503).json(buildServiceUnavailablePayload());
     }
+    next();
   });
 }
+
+app.use("/api", async (req, res, next) => {
+  if (req.path === "/health") return next();
+  const bootstrapped = await ensureStartupBootstrap();
+  if (!bootstrapped) {
+    return res.status(503).json(buildServiceUnavailablePayload());
+  }
+  next();
+});
 
 app.use("/api", api);
 
@@ -3829,7 +4096,7 @@ if (fs.existsSync(distPath)) {
 }
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, uptimeSeconds: Number(process.uptime().toFixed(0)) });
+  res.json(buildStartupHealthPayload({ scope: "app" }));
 });
 
 app.get(/.*/, (req, res) => {
@@ -3862,7 +4129,7 @@ registerGracefulShutdown({
 });
 
 const logStartupFailure = (errorLike) => {
-  const error = errorLike instanceof Error ? errorLike : new Error(String(errorLike || "Unknown startup error"));
+  const error = markStartupFailure(errorLike);
   const phase = clean(error?.startupPhase || "startup", 60) || "startup";
   const message = clean(error?.message || "Unexpected startup failure.", 500) || "Unexpected startup failure.";
 
@@ -3885,19 +4152,27 @@ const logStartupFailure = (errorLike) => {
 };
 
 if (isVercelRuntime) {
-  void ensureStartupBootstrap().catch((err) => {
-    logStartupFailure(err);
+  void ensureStartupBootstrap().then((bootstrapped) => {
+    if (!bootstrapped && startupRuntimeState.lastError) {
+      logStartupFailure(startupRuntimeState.lastError);
+    }
   });
 } else {
   startServer({
     app,
     port: PORT,
-    bootstrap: startupBootstrapSteps,
+    bootstrap: [],
     onListen: (listeningServer) => {
       server = listeningServer;
       console.log(`Server running at http://localhost:${PORT}`);
     }
   })
+    .then(() => ensureStartupBootstrap())
+    .then((bootstrapped) => {
+      if (!bootstrapped && startupRuntimeState.lastError) {
+        logStartupFailure(startupRuntimeState.lastError);
+      }
+    })
     .catch((err) => {
       logStartupFailure(err);
       process.exit(1);

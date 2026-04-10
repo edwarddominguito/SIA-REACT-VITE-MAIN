@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node src/server.js",
     "start": "node src/server.js",
+    "start:latest-ui": "npm --prefix ../frontend run build && node src/server.js",
     "google-calendar:token": "node scripts/google-calendar-oauth.js"
   },
   "dependencies": {

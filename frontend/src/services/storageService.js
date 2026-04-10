@@ -233,9 +233,11 @@ function scopeUsers(list, currentUser) {
 
 function scopeProperties(list, currentUser) {
   const properties = Array.isArray(list) ? list : [];
-  if (!currentUser) return properties;
-  if (currentUser.role === "admin" || currentUser.role === "customer") return properties;
-  return properties.filter((property) => cleanUsername(property?.agent) === currentUser.username);
+  const visibleProperties = properties.filter((property) => String(property?.propertyStatus || property?.status || "").trim().toLowerCase() !== "archived");
+  if (!currentUser) return visibleProperties;
+  if (currentUser.role === "admin") return properties;
+  if (currentUser.role === "customer") return visibleProperties;
+  return visibleProperties.filter((property) => cleanUsername(property?.agent) === currentUser.username);
 }
 
 function scopeAppointments(list, currentUser) {

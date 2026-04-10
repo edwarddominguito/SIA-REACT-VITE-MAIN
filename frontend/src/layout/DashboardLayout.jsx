@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { logout } from "@/services/authService.js";
 import { getCurrentUser, safeArray, subscribeKeys } from "@/services/storageService.js";
+import SidebarNav from "@/components/ui/SidebarNav.jsx";
 import "@/pages/dashboard/dashboard.css";
+import "@/pages/dashboard/dashboard-v2.css";
 import {
   markNotificationAsRead,
   markNotificationsAsReadForUser,
@@ -150,11 +152,13 @@ export default function DashboardLayout({
 
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.classList.add("dashboard-v2-portal-theme");
 
     document.body.style.overflow = "";
     document.documentElement.style.overflow = "";
 
     return () => {
+      document.body.classList.remove("dashboard-v2-portal-theme");
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
     };
@@ -272,23 +276,12 @@ export default function DashboardLayout({
   const desktopSidebarWidth = isSidebarCollapsed ? 92 : 270;
   const layoutInlineStyle = isDesktopViewport
     ? {
+        "--sidebar-width": `${desktopSidebarWidth}px`,
         display: "block",
-        paddingLeft: `${desktopSidebarWidth}px`,
         minHeight: "100vh"
       }
     : undefined;
-  const sidebarInlineStyle = isDesktopViewport
-    ? {
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: `${desktopSidebarWidth}px`,
-        height: "100vh",
-        overflowY: "auto",
-        overflowX: "hidden",
-        zIndex: 1040
-      }
-    : undefined;
+  const sidebarInlineStyle = undefined;
   const mainInlineStyle = isDesktopViewport
     ? {
         width: "auto",
@@ -459,15 +452,16 @@ export default function DashboardLayout({
     </>
   );
   const childItems = React.Children.toArray(children);
-  const firstChild = childItems[0];
-  const firstChildClassName = typeof firstChild?.props?.className === "string" ? firstChild.props.className : "";
-  const firstChildClasses = firstChildClassName.split(/\s+/).filter(Boolean);
-  const hasPrimaryPageHero =
-    React.isValidElement(firstChild) &&
-    typeof firstChild.type === "string" &&
-    firstChild.type.toLowerCase() === "section" &&
-    firstChildClasses.includes("agent-hero") &&
-    !firstChildClasses.includes("rowed");
+  const primaryHeroIndex = childItems.findIndex((child) => {
+    if (!React.isValidElement(child) || typeof child.type !== "string" || child.type.toLowerCase() !== "section") {
+      return false;
+    }
+    const className = typeof child.props?.className === "string" ? child.props.className : "";
+    const classes = className.split(/\s+/).filter(Boolean);
+    return classes.includes("agent-hero") && !classes.includes("rowed");
+  });
+  const primaryHeroChild = primaryHeroIndex >= 0 ? childItems[primaryHeroIndex] : null;
+  const hasPrimaryPageHero = Boolean(primaryHeroChild);
   const useDesktopShellHeader = hasPrimaryPageHero && isDesktopViewport;
   const logoutConfirmModal =
     typeof document === "undefined"
@@ -524,24 +518,25 @@ export default function DashboardLayout({
         >
           <i className={`bi ${isSidebarCollapsed ? "bi-layout-sidebar-inset-reverse" : "bi-layout-sidebar-inset"}`}></i>
         </button>
-        <div className="dashboard-page-heading-copy">{firstChild?.props?.children}</div>
+        <div className="dashboard-page-heading-copy">{primaryHeroChild?.props?.children}</div>
       </div>
       {headerActions}
     </div>
   );
   const renderedChildren = hasPrimaryPageHero
     ? useDesktopShellHeader
-      ? childItems.slice(1)
-      : [
-          React.cloneElement(firstChild, {
-            children: headerMarkup
-          }),
-          ...childItems.slice(1)
-        ]
+      ? childItems.filter((_, index) => index !== primaryHeroIndex)
+      : childItems.map((child, index) => (
+          index === primaryHeroIndex && React.isValidElement(child)
+            ? React.cloneElement(child, {
+                children: headerMarkup
+              })
+            : child
+        ))
     : childItems;
 
   return (
-    <div className={`agent-layout ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`} style={layoutInlineStyle}>
+    <div className={`agent-layout dashboard-v2 ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`} style={layoutInlineStyle}>
       <aside className={`agent-sidebar ${isNavOpen ? "open" : ""}`} style={sidebarInlineStyle}>
         <div className="agent-sidebar-head">
           <div className="agent-sidebar-brand" aria-label="TES Property Real Estate">
@@ -554,47 +549,24 @@ export default function DashboardLayout({
             </div>
           </div>
         </div>
-        <nav className="agent-nav" aria-label={`${suiteLabel} navigation`}>
-          {sidebarSections.map((section) => (
-            <section key={section.id} className="agent-nav-section">
-              <div className="agent-nav-section-head">
-                <span>{section.label}</span>
-              </div>
-              <div className="agent-nav-section-body">
-                {section.items.map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    className={activeTab === item.id ? "active" : ""}
-                    aria-current={activeTab === item.id ? "page" : undefined}
-                    onClick={() => handleTabChange(item.id)}
-                    title={item.label}
-                  >
-                    <i className={`bi ${item.icon}`}></i>
-                    <span className="agent-nav-label">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
+        <nav className="dashboard-tailwind-nav" aria-label={`${suiteLabel} navigation`}>
+          <SidebarNav
+            sections={sidebarSections}
+            activeId={activeTab}
+            onSelect={handleTabChange}
+            collapsed={isSidebarCollapsed}
+          />
         </nav>
         <div className="agent-sidebar-footer">
-          <div className="agent-sidebar-session-card">
-            <div className="agent-sidebar-session-copy">
-              <small>Signed in as</small>
-              <strong>{profileName || user?.username || "User"}</strong>
-              <span>@{user?.username || "-"}</span>
-            </div>
-            <button
-              type="button"
-              className="agent-logout-btn"
-              onClick={requestLogout}
-              title="Log out"
-            >
-              <i className="bi bi-box-arrow-right"></i>
-              <span>Log out</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            className="agent-logout-btn"
+            onClick={requestLogout}
+            title="Log out"
+          >
+            <i className="bi bi-box-arrow-right"></i>
+            <span>Log out</span>
+          </button>
         </div>
       </aside>
       <button

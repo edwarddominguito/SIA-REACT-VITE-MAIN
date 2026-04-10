@@ -19,12 +19,15 @@ import {
   autoPropertyImage,
   formatWorkflowStatus,
   formatDateTimeLabel,
+  isDisplayableProperty,
   isActiveStatus,
-  listingTypeLabel,
   normalizePropertyStatus,
   normalizeWorkflowStatus,
   normalizeAppointmentImages,
+  propertyAssetImageNames,
   propertyPriceLabel,
+  resolveAppointmentImage,
+  resolvePropertyImageSource,
   propertyStatusLabel,
   statusBadgeClass,
   tripAttendees,
@@ -48,18 +51,84 @@ import {
   toNonNegativeNumber
 } from "@/utils/input.js";
 
+const PROPERTY_IMAGE_SLOT_COUNT = 5;
+const PROPERTY_IMAGE_EXTENSION_RE = /\.(png|jpe?g|webp|gif|avif|svg)(?:[?#].*)?$/i;
+
+const emptyPropertyImageFields = () => Array.from({ length: PROPERTY_IMAGE_SLOT_COUNT }, () => "");
+
+const cleanPropertyImageInput = (value) => {
+  const candidate = String(value || "").trim().replace(/\\/g, "/");
+  if (!candidate) return "";
+  if (/^(https?:\/\/|data:image\/|blob:)/i.test(candidate)) return candidate;
+  if (candidate.startsWith("/")) return PROPERTY_IMAGE_EXTENSION_RE.test(candidate) ? candidate : "";
+  return PROPERTY_IMAGE_EXTENSION_RE.test(candidate) ? candidate : "";
+};
+
+const propertyImageFieldsFrom = (property) => {
+  const next = [];
+  const seen = new Set();
+  const push = (value) => {
+    const candidate = cleanPropertyImageInput(value);
+    if (!candidate || seen.has(candidate)) return;
+    seen.add(candidate);
+    next.push(candidate);
+  };
+
+  push(property?.imageUrl);
+  if (Array.isArray(property?.imageUrls)) {
+    property.imageUrls.forEach(push);
+  }
+
+  return Array.from({ length: PROPERTY_IMAGE_SLOT_COUNT }, (_, index) => next[index] || "");
+};
+
+const propertyImagePayloadFrom = (imageUrls) => {
+  const next = [];
+  const seen = new Set();
+  (Array.isArray(imageUrls) ? imageUrls : []).forEach((value) => {
+    const candidate = cleanPropertyImageInput(value);
+    if (!candidate || seen.has(candidate)) return;
+    seen.add(candidate);
+    next.push(candidate);
+  });
+  return next.slice(0, PROPERTY_IMAGE_SLOT_COUNT);
+};
+
+const createEmptyPropertyForm = () => ({
+  title: "",
+  location: "",
+  price: "",
+  listingType: "sale",
+  propertyType: "property",
+  propertyStatus: "available",
+  bedrooms: "",
+  bathrooms: "",
+  areaSqft: "",
+  description: "",
+  imageUrls: emptyPropertyImageFields()
+});
+
+const propertySaveErrorMessage = (error, fallback) => {
+  const message = String(error?.message || "").trim();
+  if (/payload too large/i.test(message)) {
+    return "The backend is still using the old upload limit. Restart the backend, then try uploading the photo again.";
+  }
+  return message || fallback;
+};
+
 const propertyEditorFrom = (property) => ({
   id: property.id,
   title: property.title || "",
   location: property.location || "",
   price: String(property.price || ""),
   listingType: property.listingType || "sale",
-  propertyType: property.propertyType || "",
+  propertyType: property.propertyType || "property",
   propertyStatus: property.propertyStatus || property.status || "available",
   bedrooms: String(property.bedrooms || ""),
   bathrooms: String(property.bathrooms || ""),
   areaSqft: String(property.areaSqft || ""),
-  description: property.description || ""
+  description: property.description || "",
+  imageUrls: propertyImageFieldsFrom(property)
 });
 
 const buildTripTitle = (selectedProperties) => {
@@ -81,15 +150,6 @@ const buildTripLocation = (selectedProperties) => {
   if (locations.length === 1) return locations[0];
   return "Multiple Properties";
 };
-
-const PROPERTY_TYPE_OPTIONS = [
-  { value: "house", label: "House" },
-  { value: "condo", label: "Condo" },
-  { value: "townhouse", label: "Townhouse" },
-  { value: "apartment", label: "Apartment" },
-  { value: "lot", label: "Lot" },
-  { value: "commercial", label: "Commercial" }
-];
 
 export default function AgentDashboard() {
   const user = getCurrentUser();
@@ -128,18 +188,7 @@ export default function AgentDashboard() {
   );
 
   const [editProp, setEditProp] = useState(null);
-  const [pForm, setPForm] = useState({
-    title: "",
-    location: "",
-    price: "",
-    listingType: "sale",
-    propertyType: "",
-    propertyStatus: "available",
-    bedrooms: "",
-    bathrooms: "",
-    areaSqft: "",
-    description: ""
-  });
+  const [pForm, setPForm] = useState(createEmptyPropertyForm);
   const [tForm, setTForm] = useState({ customer: "", date: "", time: "", propertyIds: [], notes: "" });
   const tripOperatingHours = useMemo(
     () => getOperatingHoursForDate(tForm.date),
@@ -148,7 +197,7 @@ export default function AgentDashboard() {
   const feedback = useUiFeedback();
 
   const refreshAll = () => {
-    const allProperties = safeArray("allProperties");
+    const allProperties = safeArray("allProperties").filter(isDisplayableProperty);
     const allUsers = safeArray("allUsers");
     const allAppointments = safeArray("allAppointments");
     const normalizedAppointments = normalizeAppointmentImages(allAppointments, allProperties);
@@ -226,6 +275,40 @@ export default function AgentDashboard() {
   const saveReviews = (next) => {
     saveArray("allReviews", next);
     setReviews(next);
+  };
+
+  const removePropertyImageAt = (index, setter) => {
+    setter((current) => {
+      const nextImages = Array.isArray(current?.imageUrls) ? current.imageUrls.slice(0, PROPERTY_IMAGE_SLOT_COUNT) : [];
+      nextImages.splice(index, 1, "");
+      return {
+        ...current,
+        imageUrls: Array.from({ length: PROPERTY_IMAGE_SLOT_COUNT }, (_, imageIndex) => nextImages[imageIndex] || "")
+      };
+    });
+  };
+
+  const updatePropertyImageAt = (index, value, setter) => {
+    setter((current) => ({
+      ...current,
+      imageUrls: Array.from({ length: PROPERTY_IMAGE_SLOT_COUNT }, (_, imageIndex) => (
+        imageIndex === index
+          ? value
+          : Array.isArray(current?.imageUrls)
+            ? current.imageUrls[imageIndex] || ""
+            : ""
+      ))
+    }));
+  };
+
+  const fillWithDetectedAssetImages = (setter) => {
+    setter((current) => ({
+      ...current,
+      imageUrls: Array.from(
+        { length: PROPERTY_IMAGE_SLOT_COUNT },
+        (_, imageIndex) => propertyAssetImageNames[imageIndex] || (Array.isArray(current?.imageUrls) ? current.imageUrls[imageIndex] || "" : "")
+      )
+    }));
   };
 
   const notifyCustomerForAppointment = (appointment, status, context = {}) => {
@@ -365,7 +448,10 @@ export default function AgentDashboard() {
     }
   };
 
-  const mineProps = useMemo(() => properties.filter((p) => p.agent === user?.username), [properties, user]);
+  const mineProps = useMemo(
+    () => properties.filter((p) => p.agent === user?.username && isDisplayableProperty(p)),
+    [properties, user]
+  );
   const customers = useMemo(() => users.filter((u) => u.role === "customer"), [users]);
   const customerNameByUsername = useMemo(() => {
     const map = new Map();
@@ -629,10 +715,7 @@ export default function AgentDashboard() {
     }
   };
   const getPropertyImage = (appointment) => {
-    const explicit = String(appointment?.propertyImage || "").trim();
-    if (explicit) return explicit;
-    const matchedProperty = properties.find((p) => String(p.id) === String(appointment?.propertyId));
-    return withImage(matchedProperty || { id: appointment?.propertyId, title: appointment?.propertyTitle, location: appointment?.location });
+    return resolveAppointmentImage(appointment, properties);
   };
   const handlePropertyImageError = (event, propertyLike) => {
     applyPropertyImageFallback(event.currentTarget, propertyLike || { title: "Property" });
@@ -865,6 +948,13 @@ export default function AgentDashboard() {
       activeTab={section}
       onTabChange={handleSectionChange}
     >
+        {propertyAssetImageNames.length ? (
+          <datalist id="property-asset-image-list">
+            {propertyAssetImageNames.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        ) : null}
         <section className="agent-hero">
           <div>
             <h1>{currentSectionLabel}</h1>
@@ -978,15 +1068,18 @@ export default function AgentDashboard() {
                     const location = cleanText(pForm.location, 120);
                     const description = cleanText(pForm.description, 500);
                     const price = toNonNegativeNumber(pForm.price, -1);
-                    const listingType = String(pForm.listingType || "sale").toLowerCase();
-                    const propertyType = cleanText(pForm.propertyType, 40).toLowerCase();
+                    const listingType = "sale";
+                    const propertyType = cleanText(pForm.propertyType || "property", 40).toLowerCase();
                     const propertyStatus = String(pForm.propertyStatus || "available").toLowerCase();
                     const bedrooms = toNonNegativeNumber(pForm.bedrooms, 0);
                     const bathrooms = toNonNegativeNumber(pForm.bathrooms, 0);
                     const areaSqft = toNonNegativeNumber(pForm.areaSqft, 0);
+                    const imageSlots = propertyImagePayloadFrom(pForm.imageUrls);
+                    const coverImage = imageSlots[0] || "";
+                    const galleryImages = imageSlots.slice(1, PROPERTY_IMAGE_SLOT_COUNT);
 
-                    if (!title || !location || price <= 0 || !propertyType) {
-                      feedback.notify("Title, location, price, and property type are required.", "error");
+                    if (!title || !location || price <= 0) {
+                      feedback.notify("Title, location, and price are required.", "error");
                       return;
                     }
                     try {
@@ -1004,33 +1097,25 @@ export default function AgentDashboard() {
                           bathrooms,
                           areaSqft,
                           description,
-                          imageUrl: "",
+                          imageUrl: coverImage,
+                          imageUrls: galleryImages,
                           agent: user.username
                         })
                       });
                       const savedProperty = res?.data;
                       if (!savedProperty?.id) throw new Error("Property was not saved by the server.");
+                      const savedImageUrls = Array.isArray(savedProperty.imageUrls) ? savedProperty.imageUrls : galleryImages;
                       const next = {
                         ...savedProperty,
-                        imageUrl: savedProperty.imageUrl || autoPropertyImage(savedProperty)
+                        imageUrl: savedProperty.imageUrl || coverImage || autoPropertyImage(savedProperty),
+                        imageUrls: savedImageUrls
                       };
                       saveProps([next, ...properties.filter((property) => String(property?.id || "") !== String(next.id))]);
                       setShowAddProperty(false);
-                      setPForm({
-                        title: "",
-                        location: "",
-                        price: "",
-                        listingType: "sale",
-                        propertyType: "",
-                        propertyStatus: "available",
-                        bedrooms: "",
-                        bathrooms: "",
-                        areaSqft: "",
-                        description: ""
-                      });
+                      setPForm(createEmptyPropertyForm());
                       feedback.notify("Property saved.", "success");
                     } catch (error) {
-                      feedback.notify(error?.message || "Unable to save property.", "error");
+                      feedback.notify(propertySaveErrorMessage(error, "Unable to save property."), "error");
                     } finally {
                       setIsSavingProperty(false);
                     }
@@ -1039,31 +1124,17 @@ export default function AgentDashboard() {
                   <div className="row g-2">
                     <div className="col-md-6"><input className="form-control" placeholder="Title" value={pForm.title} onChange={(e) => setPForm((s) => ({ ...s, title: e.target.value }))} /></div>
                     <div className="col-md-6"><input className="form-control" placeholder="Location" value={pForm.location} onChange={(e) => setPForm((s) => ({ ...s, location: e.target.value }))} /></div>
-                    <div className="col-md-4"><input className="form-control" type="number" placeholder="Price" value={pForm.price} onChange={(e) => setPForm((s) => ({ ...s, price: e.target.value }))} /></div>
-                    <div className="col-md-4">
-                      <select className="form-select" value={pForm.listingType} onChange={(e) => setPForm((s) => ({ ...s, listingType: e.target.value }))}>
-                        <option value="sale">For Sale</option>
-                        <option value="rent">For Rent</option>
-                      </select>
-                    </div>
-                    <div className="col-md-4">
+                    <div className="col-md-6"><input className="form-control" type="number" placeholder="Price" value={pForm.price} onChange={(e) => setPForm((s) => ({ ...s, price: e.target.value }))} /></div>
+                    <div className="col-md-6">
                       <select className="form-select" value={pForm.propertyStatus} onChange={(e) => setPForm((s) => ({ ...s, propertyStatus: e.target.value }))}>
                         <option value="available">Available</option>
                         <option value="reserved">Reserved</option>
                         <option value="inactive">Inactive</option>
                       </select>
                     </div>
-                    <div className="col-md-6">
-                      <select className="form-select" value={pForm.propertyType} onChange={(e) => setPForm((s) => ({ ...s, propertyType: e.target.value }))}>
-                        <option value="">Select property type</option>
-                        {PROPERTY_TYPE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
                     <div className="col-md-4"><input className="form-control" type="number" placeholder="Bedrooms" value={pForm.bedrooms} onChange={(e) => setPForm((s) => ({ ...s, bedrooms: e.target.value }))} /></div>
                     <div className="col-md-4"><input className="form-control" type="number" placeholder="Bathrooms" value={pForm.bathrooms} onChange={(e) => setPForm((s) => ({ ...s, bathrooms: e.target.value }))} /></div>
-                    <div className="col-md-6"><input className="form-control" type="number" placeholder="Area sqft" value={pForm.areaSqft} onChange={(e) => setPForm((s) => ({ ...s, areaSqft: e.target.value }))} /></div>
+                    <div className="col-md-4"><input className="form-control" type="number" placeholder="Area sqft" value={pForm.areaSqft} onChange={(e) => setPForm((s) => ({ ...s, areaSqft: e.target.value }))} /></div>
                     <div className="col-12">
                       <textarea
                         className="form-control"
@@ -1073,14 +1144,81 @@ export default function AgentDashboard() {
                         onChange={(e) => setPForm((s) => ({ ...s, description: e.target.value }))}
                       ></textarea>
                     </div>
+                    <div className="col-12">
+                      <div className="small text-muted">
+                        Enter one image at a time. Files from <code>frontend/src/assets/images/</code> and <code>frontend/public/property-images/</code> are both supported.
+                        You can type just the filename, like <code>front.jpg</code>.
+                      </div>
+                    </div>
+                    {propertyAssetImageNames.length ? (
+                      <div className="col-12">
+                        <div className="d-flex flex-wrap align-items-center gap-2">
+                          <div className="small text-muted">
+                            Detected asset images: {propertyAssetImageNames.join(", ")}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-outline-dark btn-sm"
+                            onClick={() => fillWithDetectedAssetImages(setPForm)}
+                          >
+                            Use Detected Images
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {pForm.imageUrls.map((imageUrl, index) => {
+                      const previewSrc = resolvePropertyImageSource(imageUrl);
+                      return (
+                        <div key={`create-property-image-${index}`} className="col-md-6">
+                          <label className="form-label small text-muted mb-1">
+                            Image {index + 1}{index === 0 ? " (cover)" : ""}
+                          </label>
+                          <div className="d-flex gap-2">
+                            <input
+                              className="form-control"
+                              placeholder={index === 0 ? "597272628_...jpg" : `image-${index + 1}.jpg`}
+                              list="property-asset-image-list"
+                              value={imageUrl}
+                              onChange={(e) => updatePropertyImageAt(index, e.target.value, setPForm)}
+                              onBlur={(e) => updatePropertyImageAt(index, cleanPropertyImageInput(e.target.value), setPForm)}
+                            />
+                            {imageUrl ? (
+                              <button
+                                type="button"
+                                className="btn btn-outline-dark"
+                                onClick={() => removePropertyImageAt(index, setPForm)}
+                              >
+                                Clear
+                              </button>
+                            ) : null}
+                          </div>
+                          {previewSrc ? (
+                            <div className="card mt-2 overflow-hidden">
+                              <img
+                                src={previewSrc}
+                                alt={`Property preview ${index + 1}`}
+                                className="w-100"
+                                style={{ aspectRatio: "4 / 3", objectFit: "contain", background: "#f4f4f5" }}
+                                onError={(e) => handlePropertyImageError(e, { title: pForm.title || "Property", location: pForm.location || "" })}
+                              />
+                              <div className="card-body py-2">
+                                <div className="small text-muted text-truncate">{previewSrc}</div>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="d-flex gap-2 mt-3">
-                    <button className="btn btn-dark" disabled={isSavingProperty}>{isSavingProperty ? "Saving..." : "Save Property"}</button>
+                    <button className="btn btn-dark" disabled={isSavingProperty}>
+                      {isSavingProperty ? "Saving..." : "Save Property"}
+                    </button>
                     <button
                       type="button"
                       className="btn btn-outline-dark"
                       disabled={isSavingProperty}
-                      onClick={() => setPForm({ title: "", location: "", price: "", listingType: "sale", propertyType: "", propertyStatus: "available", bedrooms: "", bathrooms: "", areaSqft: "", description: "" })}
+                      onClick={() => setPForm(createEmptyPropertyForm())}
                     >
                       Clear
                     </button>
@@ -1098,14 +1236,8 @@ export default function AgentDashboard() {
                 <div className="row g-2">
                   <div className="col-md-6"><input className="form-control" value={editProp.title} onChange={(e) => setEditProp((s) => ({ ...s, title: e.target.value }))} /></div>
                   <div className="col-md-6"><input className="form-control" value={editProp.location} onChange={(e) => setEditProp((s) => ({ ...s, location: e.target.value }))} /></div>
-                  <div className="col-md-4"><input className="form-control" type="number" value={editProp.price} onChange={(e) => setEditProp((s) => ({ ...s, price: e.target.value }))} /></div>
-                  <div className="col-md-4">
-                    <select className="form-select" value={editProp.listingType || "sale"} onChange={(e) => setEditProp((s) => ({ ...s, listingType: e.target.value }))}>
-                      <option value="sale">For Sale</option>
-                      <option value="rent">For Rent</option>
-                    </select>
-                  </div>
-                  <div className="col-md-4">
+                  <div className="col-md-6"><input className="form-control" type="number" value={editProp.price} onChange={(e) => setEditProp((s) => ({ ...s, price: e.target.value }))} /></div>
+                  <div className="col-md-6">
                     <select className="form-select" value={editProp.propertyStatus || "available"} onChange={(e) => setEditProp((s) => ({ ...s, propertyStatus: e.target.value }))}>
                       <option value="available">Available</option>
                       <option value="reserved">Reserved</option>
@@ -1114,18 +1246,75 @@ export default function AgentDashboard() {
                       <option value="rented">Rented</option>
                     </select>
                   </div>
-                  <div className="col-md-6">
-                    <select className="form-select" value={editProp.propertyType || ""} onChange={(e) => setEditProp((s) => ({ ...s, propertyType: e.target.value }))}>
-                      <option value="">Select property type</option>
-                      {PROPERTY_TYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </div>
                   <div className="col-md-4"><input className="form-control" type="number" value={editProp.bedrooms} onChange={(e) => setEditProp((s) => ({ ...s, bedrooms: e.target.value }))} /></div>
                   <div className="col-md-4"><input className="form-control" type="number" value={editProp.bathrooms} onChange={(e) => setEditProp((s) => ({ ...s, bathrooms: e.target.value }))} /></div>
-                  <div className="col-12"><input className="form-control" type="number" value={editProp.areaSqft} onChange={(e) => setEditProp((s) => ({ ...s, areaSqft: e.target.value }))} /></div>
+                  <div className="col-md-4"><input className="form-control" type="number" value={editProp.areaSqft} onChange={(e) => setEditProp((s) => ({ ...s, areaSqft: e.target.value }))} /></div>
                   <div className="col-12"><textarea className="form-control" rows="3" value={editProp.description} onChange={(e) => setEditProp((s) => ({ ...s, description: e.target.value }))}></textarea></div>
+                  <div className="col-12">
+                    <div className="small text-muted">
+                      Enter one image at a time. Files from <code>frontend/src/assets/images/</code> and <code>frontend/public/property-images/</code> are both supported.
+                      Image 1 stays the cover image for cards and listings.
+                    </div>
+                  </div>
+                  {propertyAssetImageNames.length ? (
+                    <div className="col-12">
+                      <div className="d-flex flex-wrap align-items-center gap-2">
+                        <div className="small text-muted">
+                          Detected asset images: {propertyAssetImageNames.join(", ")}
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-outline-dark btn-sm"
+                          onClick={() => fillWithDetectedAssetImages(setEditProp)}
+                        >
+                          Use Detected Images
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {editProp.imageUrls.map((imageUrl, index) => {
+                    const previewSrc = resolvePropertyImageSource(imageUrl);
+                    return (
+                      <div key={`edit-property-image-${index}`} className="col-md-6">
+                        <label className="form-label small text-muted mb-1">
+                          Image {index + 1}{index === 0 ? " (cover)" : ""}
+                        </label>
+                        <div className="d-flex gap-2">
+                          <input
+                            className="form-control"
+                            placeholder={index === 0 ? "597272628_...jpg" : `image-${index + 1}.jpg`}
+                            list="property-asset-image-list"
+                            value={imageUrl}
+                            onChange={(e) => updatePropertyImageAt(index, e.target.value, setEditProp)}
+                            onBlur={(e) => updatePropertyImageAt(index, cleanPropertyImageInput(e.target.value), setEditProp)}
+                          />
+                          {imageUrl ? (
+                            <button
+                              type="button"
+                              className="btn btn-outline-dark"
+                              onClick={() => removePropertyImageAt(index, setEditProp)}
+                            >
+                              Clear
+                            </button>
+                          ) : null}
+                        </div>
+                        {previewSrc ? (
+                          <div className="card mt-2 overflow-hidden">
+                            <img
+                              src={previewSrc}
+                              alt={`Property preview ${index + 1}`}
+                              className="w-100"
+                              style={{ aspectRatio: "4 / 3", objectFit: "contain", background: "#f4f4f5" }}
+                              onError={(e) => handlePropertyImageError(e, { title: editProp.title || "Property", location: editProp.location || "" })}
+                            />
+                            <div className="card-body py-2">
+                              <div className="small text-muted text-truncate">{previewSrc}</div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
                 <button
                   className="btn btn-dark mt-3"
@@ -1137,10 +1326,13 @@ export default function AgentDashboard() {
                     const description = cleanText(editProp.description, 500);
                     const price = toNonNegativeNumber(editProp.price, -1);
                     const listingType = String(editProp.listingType || "sale").toLowerCase();
-                    const propertyType = cleanText(editProp.propertyType, 40).toLowerCase();
+                    const propertyType = cleanText(editProp.propertyType || "property", 40).toLowerCase();
                     const propertyStatus = String(editProp.propertyStatus || "available").toLowerCase();
-                    if (!title || !location || price <= 0 || !propertyType) {
-                      feedback.notify("Title, location, price, and property type are required.", "error");
+                    const imageSlots = propertyImagePayloadFrom(editProp.imageUrls);
+                    const coverImage = imageSlots[0] || "";
+                    const galleryImages = imageSlots.slice(1, PROPERTY_IMAGE_SLOT_COUNT);
+                    if (!title || !location || price <= 0) {
+                      feedback.notify("Title, location, and price are required.", "error");
                       return;
                     }
                     try {
@@ -1158,7 +1350,8 @@ export default function AgentDashboard() {
                           bedrooms: toNonNegativeNumber(editProp.bedrooms, 0),
                           bathrooms: toNonNegativeNumber(editProp.bathrooms, 0),
                           areaSqft: toNonNegativeNumber(editProp.areaSqft, 0),
-                          imageUrl: editProp.imageUrl || ""
+                          imageUrl: coverImage,
+                          imageUrls: galleryImages
                         })
                       });
                       const updatedProperty = res?.data;
@@ -1168,13 +1361,14 @@ export default function AgentDashboard() {
                           ? p
                           : {
                               ...updatedProperty,
-                              imageUrl: updatedProperty.imageUrl || p.imageUrl || autoPropertyImage(updatedProperty)
+                              imageUrl: updatedProperty.imageUrl || coverImage || p.imageUrl || autoPropertyImage(updatedProperty),
+                              imageUrls: Array.isArray(updatedProperty.imageUrls) ? updatedProperty.imageUrls : galleryImages
                             }
                       );
                       saveProps(next);
                       setEditProp(null);
                     } catch (error) {
-                      feedback.notify(error?.message || "Unable to save property changes.", "error");
+                      feedback.notify(propertySaveErrorMessage(error, "Unable to save property changes."), "error");
                     } finally {
                       setIsSavingProperty(false);
                     }
@@ -1210,10 +1404,6 @@ export default function AgentDashboard() {
                       </span>
                     </div>
                     <p><i className="bi bi-geo-alt"></i> {p.location}</p>
-                    <div className="public-home-property-tags">
-                      <span>{listingTypeLabel(p)}</span>
-                      {p.propertyType ? <span>{String(p.propertyType).replace(/_/g, " ")}</span> : null}
-                    </div>
                     <strong>{propertyPriceLabel(p)}</strong>
                     <div className="agent-property-meta">
                       <span><i className="bi bi-door-open"></i> {Number(p.bedrooms || 0)} bed</span>
@@ -1227,27 +1417,22 @@ export default function AgentDashboard() {
                         className="btn btn-outline-danger btn-sm"
                         onClick={() => {
                           feedback.askConfirm({
-                            title: "Archive Property",
-                            message: "Archive this property and cancel active linked appointments?",
-                            confirmText: "Archive",
+                            title: "Delete Property",
+                            message: "Delete this property and cancel active linked appointments?",
+                            confirmText: "Delete",
                             variant: "danger",
                             onConfirm: async () => {
                               try {
-                                const res = await apiRequest(`/api/properties/${p.id}`, { method: "DELETE" });
-                                const archivedProperty = res?.data;
-                                saveProps(properties.map((entry) => (
-                                  String(entry?.id) === String(p.id)
-                                    ? (archivedProperty || { ...entry, propertyStatus: "archived", status: "archived" })
-                                    : entry
-                                )));
+                                await apiRequest(`/api/properties/${p.id}`, { method: "DELETE" });
+                                saveProps(properties.filter((entry) => String(entry?.id) !== String(p.id)));
                                 saveApps(apps.map((appointment) => (
                                   String(appointment?.propertyId) === String(p.id) && isActiveStatus(appointment?.status, "appointment")
-                                    ? { ...appointment, status: "cancelled", cancelReason: "Property archived" }
+                                    ? { ...appointment, status: "cancelled", cancelReason: "Property deleted" }
                                     : appointment
                                 )));
-                                feedback.notify("Property archived.", "success");
+                                feedback.notify("Property deleted.", "success");
                               } catch (error) {
-                                feedback.notify(error?.message || "Unable to archive property.", "error");
+                                feedback.notify(error?.message || "Unable to delete property.", "error");
                               }
                             }
                           });

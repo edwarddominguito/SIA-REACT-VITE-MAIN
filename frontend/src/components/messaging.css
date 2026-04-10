@@ -1,7 +1,7 @@
 .messaging-shell {
-  height: calc(100vh - 190px);
+  height: clamp(560px, calc(100vh - 210px), 760px);
   min-height: 0;
-  max-height: calc(100vh - 160px);
+  max-height: 760px;
 }
 
 .messaging-thread-panel,
@@ -20,8 +20,8 @@
 
 @media (max-width: 991px) {
   .messaging-shell {
-    height: calc(100vh - 140px);
-    max-height: calc(100vh - 120px);
+    height: clamp(520px, calc(100vh - 180px), 680px);
+    max-height: 680px;
   }
 
   .messaging-thread-panel {

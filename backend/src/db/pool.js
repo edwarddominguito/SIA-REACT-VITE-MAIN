@@ -134,15 +134,25 @@ const buildPgDiagnostics = ({ hasConnectionString, host, port }) => ({
   ssl: env.db.ssl ? "on" : "off"
 });
 
+const getPgErrorMessages = (error) => {
+  const directMessage = String(error?.message || "").trim();
+  const nestedMessages = Array.isArray(error?.errors)
+    ? error.errors.map((entry) => String(entry?.message || "").trim()).filter(Boolean)
+    : [];
+  return [directMessage, ...nestedMessages].filter(Boolean);
+};
+
+const getPrimaryPgErrorMessage = (error) => getPgErrorMessages(error)[0] || "";
+
 const isPgConnectivityError = (error) => {
   const code = String(error?.code || "").toUpperCase();
-  const message = String(error?.message || "");
-  if (["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "ETIMEDOUT", "ECONNRESET"].includes(code)) return true;
+  const message = getPgErrorMessages(error).join(" | ");
+  if (["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "ETIMEDOUT", "ECONNRESET", "EACCES"].includes(code)) return true;
   return /(ssl|certificate|connect|timeout|network|lookup|handshake)/i.test(message);
 };
 
 const buildPgConnectivityMessage = (error) => {
-  const message = String(error?.message || "");
+  const message = getPgErrorMessages(error).join(" | ");
   if (/ssl|certificate|handshake/i.test(message)) {
     return "Postgres connection failed during SSL negotiation.";
   }
@@ -154,6 +164,9 @@ const buildPgConnectivityMessage = (error) => {
   }
   if (/timeout|ETIMEDOUT/i.test(message)) {
     return "Postgres connection timed out.";
+  }
+  if (/EACCES|connect EACCES/i.test(message)) {
+    return "Postgres connection was blocked before the socket could be opened.";
   }
   return "Postgres connection failed.";
 };
@@ -168,7 +181,11 @@ const wrapPgConnectivityError = (error, diagnostics) => {
   wrapped.hint =
     "Check DATABASE_URL points to your Supabase Transaction Pooler and confirm DB_SSL is set correctly.";
   wrapped.cause = error;
-  wrapped.details = diagnostics;
+  wrapped.details = {
+    ...diagnostics,
+    code: String(error?.code || "").toUpperCase() || "UNKNOWN",
+    cause: getPrimaryPgErrorMessage(error) || "No lower-level error message was provided."
+  };
   return wrapped;
 };
 

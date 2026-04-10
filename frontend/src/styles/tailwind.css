@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+}
+
+@layer components {
+  .ui-section {
+    @apply py-14 md:py-20;
+  }
+
+  .ui-section-tight {
+    @apply py-10 md:py-14;
+  }
+
+  .ui-section-header {
+    @apply space-y-4;
+  }
+
+  .ui-kicker {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500;
+  }
+
+  .ui-badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-medium leading-none;
+  }
+}
+
+@layer utilities {
+  .typo-hero {
+    @apply font-bold text-zinc-950;
+    font-size: clamp(2.75rem, 8vw, 5rem);
+    line-height: 0.96;
+    letter-spacing: -0.04em;
+  }
+
+  .typo-page-title {
+    @apply font-bold text-zinc-950;
+    font-size: clamp(2rem, 4.6vw, 3rem);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+  }
+
+  .typo-section-title {
+    @apply font-semibold text-zinc-950;
+    font-size: clamp(1.65rem, 3.2vw, 2.35rem);
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+  }
+
+  .typo-card-title {
+    @apply text-lg font-semibold tracking-tight text-zinc-950 md:text-xl;
+  }
+
+  .typo-body {
+    @apply text-sm text-zinc-700 md:text-base;
+    line-height: 1.72;
+    letter-spacing: -0.005em;
+  }
+
+  .typo-caption {
+    @apply text-xs text-zinc-500;
+  }
+
+  .mono-focus {
+    @apply focus:outline-none focus:ring-2 focus:ring-zinc-900/15 focus:border-zinc-900;
+  }
+}

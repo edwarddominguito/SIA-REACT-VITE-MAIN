@@ -45,7 +45,7 @@ export const env = Object.freeze({
   nodeEnv: process.env.NODE_ENV || "development",
   isProduction: process.env.NODE_ENV === "production",
   port: toNumber(process.env.PORT, 3000),
-  requestSizeLimit: process.env.REQUEST_SIZE_LIMIT || "200kb",
+  requestSizeLimit: process.env.REQUEST_SIZE_LIMIT || "8mb",
   idempotencyTtlMs: toNumber(process.env.IDEMPOTENCY_TTL_MS, 30000),
   db: {
     client: dbClient,

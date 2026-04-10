@@ -69,7 +69,8 @@ api.post("/properties", requireRole(["admin", "agent"]), asyncHandler(async (req
       propertyStatus,
       status: propertyStatus,
       agent,
-      imageUrl: clean(req.body?.imageUrl, 500),
+      imageUrl: req.body?.imageUrl,
+      imageUrls: req.body?.imageUrls,
       createdAt: new Date().toISOString()
     };
     return { ...db, properties: [sanitizePropertyRecord(property), ...db.properties] };
@@ -91,7 +92,9 @@ api.patch("/properties/:id", requireRole(["admin", "agent"]), asyncHandler(async
   const listingType = normalizeListingType(req.body?.listingType, req.body);
   const propertyType = normalizePropertyType(req.body?.propertyType, req.body);
   const propertyStatus = normalizePropertyStatus(req.body?.propertyStatus || req.body?.status);
-  const imageUrl = clean(req.body?.imageUrl, 500);
+  const hasImageFields =
+    Object.prototype.hasOwnProperty.call(req.body || {}, "imageUrl") ||
+    Object.prototype.hasOwnProperty.call(req.body || {}, "imageUrls");
 
   const propertyError = validatePropertyPayload({ title, location, price, listingType, propertyType, propertyStatus, bedrooms, bathrooms, areaSqft });
   if (propertyError) {
@@ -124,8 +127,8 @@ api.patch("/properties/:id", requireRole(["admin", "agent"]), asyncHandler(async
       listingType,
       propertyType,
       propertyStatus,
-      imageUrl: imageUrl || properties[idx].imageUrl || "",
       status: propertyStatus,
+      ...(hasImageFields ? { imageUrl: req.body?.imageUrl, imageUrls: req.body?.imageUrls } : {}),
       updatedAt: new Date().toISOString()
     };
     properties[idx] = sanitizePropertyRecord(properties[idx]);
@@ -156,16 +159,7 @@ api.delete("/properties/:id", requireRole(["admin", "agent"]), asyncHandler(asyn
       throw err;
     }
 
-    const properties = db.properties.slice();
-    const idx = properties.findIndex((property) => String(property?.id) === id);
-    properties[idx] = sanitizePropertyRecord({
-      ...properties[idx],
-      propertyStatus: "archived",
-      status: "archived",
-      archivedAt: properties[idx]?.archivedAt || new Date().toISOString(),
-      archivedBy: context.username,
-      updatedAt: nowIso
-    });
+    const properties = db.properties.filter((property) => String(property?.id) !== id);
 
     cancelledAppointmentIds = db.appointments
       .filter((appointment) => String(appointment?.propertyId) === id && !isTerminalWorkflowStatus(appointment?.status))
@@ -176,7 +170,7 @@ api.delete("/properties/:id", requireRole(["admin", "agent"]), asyncHandler(asyn
       return sanitizeAppointmentRecord({
         ...appointment,
         status: "cancelled",
-        cancelReason: appointment?.cancelReason || "Property archived",
+        cancelReason: appointment?.cancelReason || "Property deleted",
         updatedAt: nowIso,
         cancelledAt: appointment?.cancelledAt || nowIso
       });
@@ -217,8 +211,7 @@ api.delete("/properties/:id", requireRole(["admin", "agent"]), asyncHandler(asyn
     await syncGoogleCalendarRecord("trip", removedTrip);
   }
 
-  const updated = nextDb.properties.find((property) => String(property?.id) === id);
-  return res.json({ ok: true, data: updated });
+  return res.json({ ok: true, data: { id, deleted: true } });
 }));
 
 };
