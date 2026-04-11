@@ -22,9 +22,11 @@ export default function AppRoutes() {
       <Route path="/notifications" element={<ProtectedRoute>{dashboardRoutes.notifications}</ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute role="admin">{dashboardRoutes.admin}</ProtectedRoute>} />
       <Route path="/admin/add-user" element={<ProtectedRoute role="admin">{dashboardRoutes.adminAddUser}</ProtectedRoute>} />
+      <Route path="/agent/meets/virtual" element={<ProtectedRoute role="agent">{dashboardRoutes.agentVirtualMeeting}</ProtectedRoute>} />
       <Route path="/agent" element={<ProtectedRoute role="agent">{dashboardRoutes.agent}</ProtectedRoute>} />
       <Route path="/agent/add-property" element={<ProtectedRoute role="agent">{dashboardRoutes.agentAddProperty}</ProtectedRoute>} />
       <Route path="/agent/schedule-trip" element={<ProtectedRoute role="agent">{dashboardRoutes.agentScheduleTrip}</ProtectedRoute>} />
+      <Route path="/customer/meets/virtual" element={<ProtectedRoute role="customer">{dashboardRoutes.customerVirtualMeeting}</ProtectedRoute>} />
       <Route path="/customer/*" element={<ProtectedRoute role="customer">{dashboardRoutes.customer}</ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />

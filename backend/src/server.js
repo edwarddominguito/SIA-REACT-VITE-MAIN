@@ -68,7 +68,8 @@ const defaultDb = {
   reviews: [],
   notifications: [],
   trips: [],
-  messages: []
+  messages: [],
+  messageThreadStates: []
 };
 
 const demoUsers = [
@@ -333,6 +334,16 @@ const ensurePostgresSchema = async () => {
       updated_at TIMESTAMP NULL
     );
   `);
+  await dbPool.query(`
+    CREATE TABLE IF NOT EXISTS message_thread_states (
+      owner_user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      contact_user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      archived_at TIMESTAMP NULL,
+      deleted_at TIMESTAMP NULL,
+      updated_at TIMESTAMP NULL,
+      PRIMARY KEY (owner_user_id, contact_user_id)
+    );
+  `);
 
   await dbPool.query(`
     CREATE TABLE IF NOT EXISTS calendar_events (
@@ -471,6 +482,8 @@ const ensurePostgresSchema = async () => {
   await dbPool.query("CREATE INDEX IF NOT EXISTS idx_messages_recipient_user_id ON messages(recipient_user_id)");
   await dbPool.query("CREATE INDEX IF NOT EXISTS idx_messages_provider_message_id ON messages(provider_message_id)");
   await dbPool.query("CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)");
+  await dbPool.query("CREATE INDEX IF NOT EXISTS idx_message_thread_states_owner_user_id ON message_thread_states(owner_user_id)");
+  await dbPool.query("CREATE INDEX IF NOT EXISTS idx_message_thread_states_archived_at ON message_thread_states(archived_at)");
 };
 
 const ensureColumn = async (tableName, columnName, definition) => {
@@ -783,6 +796,24 @@ const ensureDbSchema = async () => {
   await ensureIndex("messages", "idx_messages_created_at", "(created_at)");
   await dbPool.query("ALTER TABLE messages MODIFY COLUMN channel ENUM('app','sms') NOT NULL DEFAULT 'app'");
   await dbPool.query("ALTER TABLE messages MODIFY COLUMN provider VARCHAR(30) NOT NULL DEFAULT 'internal'");
+  await dbPool.query(`
+    CREATE TABLE IF NOT EXISTS message_thread_states (
+      owner_user_id VARCHAR(64) NOT NULL,
+      contact_user_id VARCHAR(64) NOT NULL,
+      archived_at DATETIME NULL,
+      deleted_at DATETIME NULL,
+      updated_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (owner_user_id, contact_user_id),
+      CONSTRAINT fk_message_thread_states_owner
+        FOREIGN KEY (owner_user_id) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT fk_message_thread_states_contact
+        FOREIGN KEY (contact_user_id) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+  await ensureIndex("message_thread_states", "idx_message_thread_states_owner_user_id", "(owner_user_id)");
+  await ensureIndex("message_thread_states", "idx_message_thread_states_archived_at", "(archived_at)");
 
   await dbPool.query("ALTER TABLE appointments MODIFY COLUMN status VARCHAR(30) NOT NULL DEFAULT 'pending'");
   await dbPool.query("ALTER TABLE office_meets MODIFY COLUMN status VARCHAR(30) NOT NULL DEFAULT 'pending'");
@@ -1464,7 +1495,7 @@ const sanitizeAppointmentRecord = (value) => {
     propertyImage: clean(appointment.propertyImage, 1000),
     customer: clean(appointment.customer, 50),
     agent: clean(appointment.agent, 50),
-    assignedAgent: clean(appointment.assignedAgent || appointment.agent, 50),
+    assignedAgent: clean(appointment.assignedAgent, 50),
     assignedByAdmin: clean(appointment.assignedByAdmin, 50),
     date: toIsoDateOnly(appointment.date),
     time: toSqlTime(appointment.time)?.slice(0, 5) || "",
@@ -1802,6 +1833,13 @@ const normalizeFallbackMessageRecord = (record) => {
     updatedAt: toIso(record?.updatedAt ?? record?.updated_at) || null
   };
 };
+const normalizeMessageThreadStateRecord = (record) => ({
+  ownerUserId: clean(record?.ownerUserId ?? record?.owner_user_id, 64),
+  contactUserId: clean(record?.contactUserId ?? record?.contact_user_id, 64),
+  archivedAt: toIso(record?.archivedAt ?? record?.archived_at) || null,
+  deletedAt: toIso(record?.deletedAt ?? record?.deleted_at) || null,
+  updatedAt: toIso(record?.updatedAt ?? record?.updated_at) || null
+});
 const loadFallbackDb = ({ forceReload = false } = {}) => {
   if (!forceReload && cachedDb) {
     return clone(cachedDb);
@@ -1826,7 +1864,8 @@ const loadFallbackDb = ({ forceReload = false } = {}) => {
     reviews: normalizeRecordCollection(parsed?.reviews),
     notifications: normalizeRecordCollection(parsed?.notifications),
     trips: normalizeRecordCollection(parsed?.trips).map((trip) => sanitizeTripRecord(trip)),
-    messages: normalizeRecordCollection(parsed?.messages).map((message) => normalizeFallbackMessageRecord(message))
+    messages: normalizeRecordCollection(parsed?.messages).map((message) => normalizeFallbackMessageRecord(message)),
+    messageThreadStates: normalizeRecordCollection(parsed?.messageThreadStates).map((state) => normalizeMessageThreadStateRecord(state))
   };
   normalized.calendarEvents = buildCalendarEventsFromState(normalized);
   cachedDb = ensureDemoUsers(normalized);
@@ -1843,7 +1882,8 @@ const saveFallbackDb = async (nextDb) => {
     reviews: normalizeRecordCollection(nextDb?.reviews),
     notifications: normalizeRecordCollection(nextDb?.notifications),
     trips: normalizeRecordCollection(nextDb?.trips).map((trip) => sanitizeTripRecord(trip)),
-    messages: normalizeRecordCollection(nextDb?.messages).map((message) => normalizeFallbackMessageRecord(message))
+    messages: normalizeRecordCollection(nextDb?.messages).map((message) => normalizeFallbackMessageRecord(message)),
+    messageThreadStates: normalizeRecordCollection(nextDb?.messageThreadStates).map((state) => normalizeMessageThreadStateRecord(state))
   });
   normalized.calendarEvents = buildCalendarEventsFromState(normalized);
   cachedDb = clone(normalized);
@@ -2129,7 +2169,8 @@ const saveDb = async (nextDb) => {
     reviews: normalizeRecordCollection(nextDb?.reviews),
     notifications: normalizeRecordCollection(nextDb?.notifications),
     trips: normalizeRecordCollection(nextDb?.trips).map((trip) => sanitizeTripRecord(trip)),
-    messages: normalizeRecordCollection(nextDb?.messages).map((message) => normalizeFallbackMessageRecord(message))
+    messages: normalizeRecordCollection(nextDb?.messages).map((message) => normalizeFallbackMessageRecord(message)),
+    messageThreadStates: normalizeRecordCollection(nextDb?.messageThreadStates).map((state) => normalizeMessageThreadStateRecord(state))
   });
   normalized.calendarEvents = buildCalendarEventsFromState(normalized);
   if (isStorageFallbackActive()) {
@@ -2853,10 +2894,116 @@ const publishMessageRealtimeUpdate = ({ eventType, senderUser, recipientUser, me
   }
 };
 
-const buildMessageContactSummaries = async (db, currentUser) => {
+const parseComparableTimestamp = (value) => {
+  const timestamp = Date.parse(value || "");
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+const loadMessageThreadStatesForOwner = async (ownerUserId) => {
+  const normalizedOwnerUserId = clean(ownerUserId, 64);
+  if (!normalizedOwnerUserId) return new Map();
+
+  if (isStorageFallbackActive()) {
+    const db = loadFallbackDb({ forceReload: true });
+    const next = new Map();
+    normalizeRecordCollection(db?.messageThreadStates)
+      .map((state) => normalizeMessageThreadStateRecord(state))
+      .forEach((state) => {
+        if (state.ownerUserId !== normalizedOwnerUserId || !state.contactUserId) return;
+        next.set(state.contactUserId, state);
+      });
+    return next;
+  }
+
+  const [rows] = await dbPool.query(
+    `SELECT owner_user_id, contact_user_id, archived_at, deleted_at, updated_at
+     FROM message_thread_states
+     WHERE owner_user_id = ?`,
+    [normalizedOwnerUserId]
+  );
+  const next = new Map();
+  rows.forEach((row) => {
+    const normalized = normalizeMessageThreadStateRecord(row);
+    if (!normalized.contactUserId) return;
+    next.set(normalized.contactUserId, normalized);
+  });
+  return next;
+};
+
+const getMessageThreadStateForUsers = async (ownerUserId, contactUserId) => {
+  const normalizedOwnerUserId = clean(ownerUserId, 64);
+  const normalizedContactUserId = clean(contactUserId, 64);
+  if (!normalizedOwnerUserId || !normalizedContactUserId) return null;
+  const states = await loadMessageThreadStatesForOwner(normalizedOwnerUserId);
+  return states.get(normalizedContactUserId) || null;
+};
+
+const saveMessageThreadStateForUsers = async ({ ownerUserId, contactUserId, archivedAt = null, deletedAt = null }) => {
+  const normalizedOwnerUserId = clean(ownerUserId, 64);
+  const normalizedContactUserId = clean(contactUserId, 64);
+  if (!normalizedOwnerUserId || !normalizedContactUserId || normalizedOwnerUserId === normalizedContactUserId) {
+    return null;
+  }
+
+  const nextState = normalizeMessageThreadStateRecord({
+    ownerUserId: normalizedOwnerUserId,
+    contactUserId: normalizedContactUserId,
+    archivedAt,
+    deletedAt,
+    updatedAt: new Date().toISOString()
+  });
+  const shouldPersist = Boolean(nextState.archivedAt || nextState.deletedAt);
+
+  if (isStorageFallbackActive()) {
+    const db = loadFallbackDb({ forceReload: true });
+    const nextStates = normalizeRecordCollection(db?.messageThreadStates)
+      .map((state) => normalizeMessageThreadStateRecord(state))
+      .filter((state) => !(state.ownerUserId === normalizedOwnerUserId && state.contactUserId === normalizedContactUserId));
+    if (shouldPersist) {
+      nextStates.unshift(nextState);
+    }
+    await saveFallbackDb({
+      ...db,
+      messageThreadStates: nextStates
+    });
+    return shouldPersist ? nextState : null;
+  }
+
+  if (!shouldPersist) {
+    await dbPool.query(
+      `DELETE FROM message_thread_states
+       WHERE owner_user_id = ? AND contact_user_id = ?`,
+      [normalizedOwnerUserId, normalizedContactUserId]
+    );
+    return null;
+  }
+
+  const archivedAtSql = toSqlDateTime(nextState.archivedAt, false);
+  const deletedAtSql = toSqlDateTime(nextState.deletedAt, false);
+  if (DB_CLIENT === "postgres") {
+    await dbPool.query(
+      `INSERT INTO message_thread_states (owner_user_id, contact_user_id, archived_at, deleted_at, updated_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT (owner_user_id, contact_user_id)
+       DO UPDATE SET archived_at = EXCLUDED.archived_at, deleted_at = EXCLUDED.deleted_at, updated_at = CURRENT_TIMESTAMP`,
+      [normalizedOwnerUserId, normalizedContactUserId, archivedAtSql, deletedAtSql]
+    );
+  } else {
+    await dbPool.query(
+      `INSERT INTO message_thread_states (owner_user_id, contact_user_id, archived_at, deleted_at, updated_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON DUPLICATE KEY UPDATE archived_at = VALUES(archived_at), deleted_at = VALUES(deleted_at), updated_at = CURRENT_TIMESTAMP`,
+      [normalizedOwnerUserId, normalizedContactUserId, archivedAtSql, deletedAtSql]
+    );
+  }
+  return nextState;
+};
+
+const buildMessageContactSummaries = async (db, currentUser, threadStateMap = null) => {
   const userId = clean(currentUser?.id, 64);
   const userPhone = normalizeSmsPhone(currentUser?.phone);
   if (!userId && !userPhone) return new Map();
+  const threadStates = threadStateMap instanceof Map ? threadStateMap : await loadMessageThreadStatesForOwner(userId);
 
   if (isStorageFallbackActive()) {
     const rows = normalizeRecordCollection(db?.messages)
@@ -2885,6 +3032,9 @@ const buildMessageContactSummaries = async (db, currentUser) => {
         counterpartUserId = clean(counterpartUser?.id, 64);
       }
 
+      const deletedCutoff = parseComparableTimestamp(threadStates.get(counterpartUserId)?.deletedAt);
+      const messageCreatedAt = parseComparableTimestamp(row?.createdAt);
+      if (deletedCutoff !== null && messageCreatedAt !== null && messageCreatedAt <= deletedCutoff) return;
       if (!counterpartUserId || next.has(counterpartUserId)) return;
       next.set(counterpartUserId, {
         lastMessage: clean(row?.content, 240),
@@ -2927,6 +3077,9 @@ const buildMessageContactSummaries = async (db, currentUser) => {
       counterpartUserId = clean(counterpartUser?.id, 64);
     }
 
+    const deletedCutoff = parseComparableTimestamp(threadStates.get(counterpartUserId)?.deletedAt);
+    const messageCreatedAt = parseComparableTimestamp(row?.created_at);
+    if (deletedCutoff !== null && messageCreatedAt !== null && messageCreatedAt <= deletedCutoff) return;
     if (!counterpartUserId || next.has(counterpartUserId)) return;
     next.set(counterpartUserId, {
       lastMessage: clean(row?.content, 240),
@@ -4156,6 +4309,9 @@ const routeDeps = {
   getMessageTransportMeta,
   findUserRecord,
   buildMessageContactSummaries,
+  loadMessageThreadStatesForOwner,
+  getMessageThreadStateForUsers,
+  saveMessageThreadStateForUsers,
   canMessageUser,
   normalizeSmsPhone,
   toIso,

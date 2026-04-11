@@ -142,7 +142,7 @@ export default function AgentScheduleTripPage() {
     }
     if (!isWithinOperatingHours(date, time)) {
       if (tripOperatingHours.isClosed) {
-        feedback.notify("Tours are not available on Sunday.", "error");
+        feedback.notify("Trips are not available on Sunday.", "error");
       } else {
         feedback.notify(`Tour time must be within ${tripOperatingHours.label}.`, "error");
       }
@@ -226,7 +226,7 @@ export default function AgentScheduleTripPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 0 10px" }}>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0 }}>Schedule Property Tour</h1>
         <button className="btn btn-outline-dark btn-sm" onClick={() => navigate("/agent", { state: { section: "trips" } })}>
-          <i className="bi bi-arrow-left me-1"></i>Back to Tours
+          <i className="bi bi-arrow-left me-1"></i>Back to Trips
         </button>
       </div>
 

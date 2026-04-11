@@ -7,4 +7,3 @@ export const appConfig = Object.freeze({
 });
 
 export default appConfig;
-

@@ -12,6 +12,9 @@ export const registerMessagesServiceRoutes = (api, model) => {
     findUserRecord,
     clean,
     buildMessageContactSummaries,
+    loadMessageThreadStatesForOwner,
+    getMessageThreadStateForUsers,
+    saveMessageThreadStateForUsers,
     normalizeRecordCollection,
     canMessageUser,
     toRole,
@@ -38,6 +41,11 @@ export const registerMessagesServiceRoutes = (api, model) => {
     HTTPSMS_FROM,
     isStorageFallbackActive
   } = deps;
+
+const parseConversationTimestamp = (value) => {
+  const timestamp = Date.parse(value || "");
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
 
 api.get("/messages/stream", requireRole(["admin", "agent", "customer"]), asyncHandler(async (req, res) => {
   const context = getRequestUserContext(req);
@@ -72,10 +80,14 @@ api.get("/messages/contacts", requireRole(["admin", "agent", "customer"]), async
     return res.status(404).json({ ok: false, message: "Current user not found." });
   }
 
-  const messageSummaries = await buildMessageContactSummaries(db, currentUser);
+  const archivedQuery = clean(req.query?.archived || "", 20).toLowerCase();
+  const showArchived = ["1", "true", "yes", "archived"].includes(archivedQuery);
+  const threadStates = await loadMessageThreadStatesForOwner(currentUser.id);
+  const messageSummaries = await buildMessageContactSummaries(db, currentUser, threadStates);
   const contacts = normalizeRecordCollection(db.users)
     .filter((user) => canMessageUser(context, user))
     .map((user) => {
+      const threadState = threadStates.get(clean(user?.id, 64)) || null;
       const summary = messageSummaries.get(clean(user?.id, 64)) || null;
       return {
         id: clean(user?.id, 64),
@@ -87,9 +99,12 @@ api.get("/messages/contacts", requireRole(["admin", "agent", "customer"]), async
         availabilityStatus: normalizeAvailabilityStatus(user?.availabilityStatus),
         accountStatus: normalizeAccountStatus(user?.accountStatus),
         lastMessage: clean(summary?.lastMessage, 240),
-        lastMessageAt: toIso(summary?.lastMessageAt)
+        lastMessageAt: toIso(summary?.lastMessageAt),
+        archivedAt: toIso(threadState?.archivedAt),
+        deletedAt: toIso(threadState?.deletedAt)
       };
     })
+    .filter((contact) => showArchived ? Boolean(contact.archivedAt) : !contact.archivedAt)
     .sort((a, b) => {
       const timeA = Date.parse(a.lastMessageAt || "");
       const timeB = Date.parse(b.lastMessageAt || "");
@@ -103,7 +118,86 @@ api.get("/messages/contacts", requireRole(["admin", "agent", "customer"]), async
   return res.json({
     ok: true,
     data: contacts,
-    meta: getLegacyMessageTransportMeta()
+    meta: {
+      archived: showArchived,
+      ...getLegacyMessageTransportMeta()
+    }
+  });
+}));
+
+api.patch("/messages/contacts/:contact/thread", requireRole(["admin", "agent", "customer"]), asyncHandler(async (req, res) => {
+  const db = await loadDb();
+  const context = getRequestUserContext(req);
+  const currentUser = findUserRecord(db, context.username);
+  if (!currentUser) {
+    return res.status(404).json({ ok: false, message: "Current user not found." });
+  }
+
+  const contactValue = clean(req.params?.contact || "", 80);
+  const archived = req.body?.archived;
+  if (typeof archived !== "boolean") {
+    return res.status(400).json({ ok: false, message: "archived boolean is required." });
+  }
+
+  const contactUser = findUserRecord(db, contactValue);
+  if (!contactUser || !canMessageUser(context, contactUser)) {
+    return res.status(404).json({ ok: false, message: "Message contact not found or not allowed." });
+  }
+
+  const currentState = await getMessageThreadStateForUsers(currentUser.id, contactUser.id);
+  const nextState = await saveMessageThreadStateForUsers({
+    ownerUserId: currentUser.id,
+    contactUserId: contactUser.id,
+    archivedAt: archived ? (currentState?.archivedAt || new Date().toISOString()) : null,
+    deletedAt: currentState?.deletedAt || null
+  });
+
+  return res.json({
+    ok: true,
+    data: {
+      contact: {
+        id: clean(contactUser?.id, 64),
+        username: clean(contactUser?.username, 50),
+        fullName: clean(contactUser?.fullName, 90)
+      },
+      archived: Boolean(nextState?.archivedAt),
+      archivedAt: toIso(nextState?.archivedAt),
+      deletedAt: toIso(nextState?.deletedAt)
+    }
+  });
+}));
+
+api.delete("/messages/contacts/:contact/thread", requireRole(["admin", "agent", "customer"]), asyncHandler(async (req, res) => {
+  const db = await loadDb();
+  const context = getRequestUserContext(req);
+  const currentUser = findUserRecord(db, context.username);
+  if (!currentUser) {
+    return res.status(404).json({ ok: false, message: "Current user not found." });
+  }
+
+  const contactValue = clean(req.params?.contact || "", 80);
+  const contactUser = findUserRecord(db, contactValue);
+  if (!contactUser || !canMessageUser(context, contactUser)) {
+    return res.status(404).json({ ok: false, message: "Message contact not found or not allowed." });
+  }
+
+  const nextState = await saveMessageThreadStateForUsers({
+    ownerUserId: currentUser.id,
+    contactUserId: contactUser.id,
+    archivedAt: null,
+    deletedAt: new Date().toISOString()
+  });
+
+  return res.json({
+    ok: true,
+    data: {
+      contact: {
+        id: clean(contactUser?.id, 64),
+        username: clean(contactUser?.username, 50),
+        fullName: clean(contactUser?.fullName, 90)
+      },
+      deletedAt: toIso(nextState?.deletedAt)
+    }
   });
 }));
 
@@ -128,6 +222,8 @@ api.get("/messages", requireRole(["admin", "agent", "customer"]), asyncHandler(a
   const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 200);
   const currentUserPhone = normalizeSmsPhone(currentUser?.phone);
   const contactUserPhone = normalizeSmsPhone(contactUser?.phone);
+  const threadState = await getMessageThreadStateForUsers(currentUser.id, contactUser.id);
+  const deletedCutoff = parseConversationTimestamp(threadState?.deletedAt);
   const rows = isStorageFallbackActive()
     ? normalizeRecordCollection(db.messages)
         .filter((message) => {
@@ -224,6 +320,11 @@ api.get("/messages", requireRole(["admin", "agent", "customer"]), asyncHandler(a
         recipientFullName: row.recipient_full_name || recipientFallback?.fullName,
         recipientRole: row.recipient_role || recipientFallback?.role
       }, context);
+    })
+    .filter((message) => {
+      if (deletedCutoff === null) return true;
+      const createdAt = parseConversationTimestamp(message?.createdAt);
+      return createdAt === null || createdAt > deletedCutoff;
     });
 
   return res.json({
@@ -236,7 +337,9 @@ api.get("/messages", requireRole(["admin", "agent", "customer"]), asyncHandler(a
         fullName: clean(contactUser?.fullName, 90),
         role: toRole(contactUser?.role),
         phone: clean(contactUser?.phone, 30),
-        smsPhone: normalizeSmsPhone(contactUser?.phone)
+        smsPhone: normalizeSmsPhone(contactUser?.phone),
+        archivedAt: toIso(threadState?.archivedAt),
+        deletedAt: toIso(threadState?.deletedAt)
       },
       ...getLegacyMessageTransportMeta()
     }
@@ -288,6 +391,28 @@ api.post("/messages", requireRole(["admin", "agent", "customer"]), asyncHandler(
   };
 
   await insertMessageRecord(baseRecord);
+  const [senderThreadState, recipientThreadState] = await Promise.all([
+    getMessageThreadStateForUsers(currentUser.id, contactUser.id),
+    getMessageThreadStateForUsers(contactUser.id, currentUser.id)
+  ]);
+  await Promise.all([
+    senderThreadState?.archivedAt
+      ? saveMessageThreadStateForUsers({
+          ownerUserId: currentUser.id,
+          contactUserId: contactUser.id,
+          archivedAt: null,
+          deletedAt: senderThreadState?.deletedAt || null
+        })
+      : Promise.resolve(),
+    recipientThreadState?.archivedAt
+      ? saveMessageThreadStateForUsers({
+          ownerUserId: contactUser.id,
+          contactUserId: currentUser.id,
+          archivedAt: null,
+          deletedAt: recipientThreadState?.deletedAt || null
+        })
+      : Promise.resolve()
+  ]);
 
   const responseRecord = {
     ...baseRecord,
@@ -483,6 +608,17 @@ api.post("/messages/webhooks/httpsms", asyncHandler(async (req, res) => {
       createdAt: payload.sentAt || new Date().toISOString()
     };
     await insertMessageRecord(inboundRecord);
+    if (recipientUser?.id && senderUser?.id) {
+      const recipientThreadState = await getMessageThreadStateForUsers(recipientUser.id, senderUser.id);
+      if (recipientThreadState?.archivedAt) {
+        await saveMessageThreadStateForUsers({
+          ownerUserId: recipientUser.id,
+          contactUserId: senderUser.id,
+          archivedAt: null,
+          deletedAt: recipientThreadState?.deletedAt || null
+        });
+      }
+    }
     publishMessageRealtimeUpdate({
       eventType: "message_created",
       senderUser,

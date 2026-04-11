@@ -489,11 +489,25 @@ export default function CustomerDashboard() {
     return properties.filter((p) => ids.has(String(p.id))).slice(0, 4);
   }, [myApps, myTrips, properties]);
 
-  const currentTabLabel = tab === "appointments"
+  const currentTabLabel = tab === "dashboard"
+    ? "Overview"
+    : tab === "appointments"
     ? "My Appointments"
     : tab === "trips"
-      ? "My Tours"
-    : CUSTOMER_NAV_ITEMS.find((item) => item.id === tab)?.label || "Dashboard";
+    ? "My Trips"
+    : tab === "browse"
+    ? "Book Appointment"
+    : tab === "meets"
+    ? "Office Meetings"
+    : tab === "calendar"
+    ? "My Calendar"
+    : tab === "messages"
+    ? "Inbox"
+    : tab === "reviews"
+    ? "My Reviews"
+    : tab === "profile"
+    ? "My Account"
+    : CUSTOMER_NAV_ITEMS.find((item) => item.id === tab)?.label || "Overview";
   const propertyLinkState = { from: location.pathname };
   const handleCustomerTabChange = (nextTab) => {
     setTab(nextTab);
@@ -785,42 +799,74 @@ export default function CustomerDashboard() {
 
         {tab === "dashboard" && (
           <>
-            <section className="agent-stats-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
-              <CustomerStatCard label="Total Appointments" value={myApps.length} icon="bi-calendar2-check" />
-              <CustomerStatCard label="Pending Requests" value={myPending.length} icon="bi-hourglass-split" />
-              <CustomerStatCard label="Upcoming Events" value={upcomingCalendarEvents.length} icon="bi-calendar3" />
-              <CustomerStatCard label="Saved Properties" value={savedProperties.length} icon="bi-house-heart" />
+            <section className="dash-stats">
+              <div className="dash-stat">
+                <div className="dash-stat-icon blue"><i className="bi bi-calendar2-check"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{myApps.length}</span>
+                  <span className="dash-stat-label">Appointments</span>
+                </div>
+                <span className="dash-stat-sub">{myPending.length} pending</span>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon amber"><i className="bi bi-hourglass-split"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{myPending.length}</span>
+                  <span className="dash-stat-label">Pending</span>
+                </div>
+                <span className="dash-stat-sub">awaiting confirmation</span>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon green"><i className="bi bi-calendar3"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{upcomingCalendarEvents.length}</span>
+                  <span className="dash-stat-label">Upcoming</span>
+                </div>
+                <span className="dash-stat-sub">events this period</span>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon violet"><i className="bi bi-house-heart"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{savedProperties.length}</span>
+                  <span className="dash-stat-label">Properties</span>
+                </div>
+                <span className="dash-stat-sub">from your bookings</span>
+              </div>
             </section>
 
-            <section className="agent-split-grid">
-              <article className="agent-panel">
-                <div className="agent-panel-head">
-                  <h3>Upcoming Appointment</h3>
+            <section className="dash-bottom-grid">
+              <article className="dash-card">
+                <div className="dash-card-head">
+                  <h3>Next Appointment</h3>
                 </div>
                 {nextUpcomingAppointment ? (
-                  <div className="agent-mini-row trip">
-                    <div>
-                      <div className="fw-bold">{nextUpcomingAppointment.propertyTitle || "Property Appointment"}</div>
-                      <div className="small muted">{formatDateTimeLabel(nextUpcomingAppointment.date, nextUpcomingAppointment.time)}</div>
-                      <div className="small muted">{nextUpcomingAppointment.location || "-"}</div>
+                  <div className="dash-activity-list">
+                    <div className="dash-activity-row">
+                      <i className="bi bi-calendar2-check dash-activity-icon"></i>
+                      <div className="dash-activity-body">
+                        <strong>{nextUpcomingAppointment.propertyTitle || "Property Appointment"}</strong>
+                        <span className="dash-activity-meta">{formatDateTimeLabel(nextUpcomingAppointment.date, nextUpcomingAppointment.time)} · {nextUpcomingAppointment.location || "-"}</span>
+                      </div>
+                      <span className={statusBadgeClass(nextUpcomingAppointment.status, "appointment")}>{formatWorkflowStatus(nextUpcomingAppointment.status, "appointment")}</span>
                     </div>
-                    <span className={statusBadgeClass(nextUpcomingAppointment.status, "appointment")}>{formatWorkflowStatus(nextUpcomingAppointment.status, "appointment")}</span>
                   </div>
                 ) : (
-                  <div className="agent-empty compact"><i className="bi bi-calendar2"></i><p>No upcoming appointment yet.</p></div>
+                  <div className="agent-empty compact"><i className="bi bi-calendar2"></i><p>No upcoming appointment.</p></div>
                 )}
               </article>
 
-              <article className="agent-panel">
-                <div className="agent-panel-head">
-                  <h3>Upcoming Calendar Events</h3>
+              <article className="dash-card">
+                <div className="dash-card-head">
+                  <h3>Upcoming Events</h3>
+                  <span className="badge badge-soft">{upcomingCalendarEvents.length}</span>
                 </div>
-                <div className="agent-stack">
+                <div className="dash-activity-list">
                   {upcomingCalendarEvents.map((evt) => (
-                    <div key={evt.id} className="agent-mini-row trip">
-                      <div>
-                        <div className="fw-bold">{evt.title || "Event"}</div>
-                        <div className="small muted">{formatDateTimeLabel(evt.date, evt.time)}</div>
+                    <div key={evt.id} className="dash-activity-row">
+                      <i className={`bi ${evt.type === "trip" ? "bi-car-front" : evt.type === "meet" ? "bi-building" : "bi-calendar2-check"} dash-activity-icon`}></i>
+                      <div className="dash-activity-body">
+                        <strong>{evt.title || "Event"}</strong>
+                        <span className="dash-activity-meta">{formatDateTimeLabel(evt.date, evt.time)}</span>
                       </div>
                       <span className={statusBadgeClass(evt.status, evt.type === "trip" ? "tour" : evt.type === "meet" ? "office_meeting" : "appointment")}>
                         {formatWorkflowStatus(evt.status, evt.type === "trip" ? "tour" : evt.type === "meet" ? "office_meeting" : "appointment")}
@@ -1291,7 +1337,7 @@ export default function CustomerDashboard() {
         {tab === "calendar" && (
           <DashboardCalendar
             title="My Event Calendar"
-            subtitle="View your appointments, office meetings, and tours."
+            subtitle="View your appointments, office meetings, and trips."
             events={customerCalendarEvents}
             storageKey="dashboard-calendar-cursor:customer"
           />
@@ -1523,115 +1569,139 @@ export default function CustomerDashboard() {
         )}
 
         {tab === "trips" && (
-          <section className="agent-panel">
-            <div className="trip-page-head">
+          <section className="trips-page">
+            {/* Page header */}
+            <div className="trips-page-header">
+              <div className="trips-page-icon"><i className="bi bi-car-front-fill"></i></div>
               <div>
-                <h3>My Tours</h3>
-                <p>Track your grouped property visits and assigned schedules.</p>
+                <h2 className="trips-page-title">My Trips</h2>
+                <p className="trips-page-sub">Track your grouped property visits and assigned schedules.</p>
               </div>
             </div>
 
-            <div className="trip-section-title">Upcoming Tours</div>
-            <div className="trip-list-stack">
-              {upcomingTrips.map((t) => {
-                const status = tripStatus(t);
-                const statusLabel = formatWorkflowStatus(status, "tour");
-                const attendees = tripAttendees(t);
-                const joined = attendees.includes(user.username);
-                const selected = (Array.isArray(t.propertyIds) ? t.propertyIds : [])
-                  .map((pid) => properties.find((p) => String(p.id) === String(pid)))
-                  .filter(Boolean);
-                return (
-                  <article className="trip-item-card" key={t.id}>
-                    <div className="trip-item-main">
-                      <div className="trip-item-top">
-                        <div className="trip-item-title-row">
-                          <i className="bi bi-car-front"></i>
-                          <strong>{t.title || "Property Tour"}</strong>
-                          <span className={`trip-status-chip ${status}`}>{statusLabel}</span>
+            {/* Upcoming */}
+            <div className="trips-section">
+              <div className="trips-section-header">
+                <span className="trips-section-label">Upcoming Trips</span>
+                {upcomingTrips.length > 0 && <span className="trips-count-badge">{upcomingTrips.length}</span>}
+              </div>
+              <div className="trip-list-stack">
+                {upcomingTrips.map((t) => {
+                  const status = tripStatus(t);
+                  const statusLabel = formatWorkflowStatus(status, "tour");
+                  const attendees = tripAttendees(t);
+                  const joined = attendees.includes(user.username);
+                  const selected = (Array.isArray(t.propertyIds) ? t.propertyIds : [])
+                    .map((pid) => properties.find((p) => String(p.id) === String(pid)))
+                    .filter(Boolean);
+                  return (
+                    <article className="trip-item-card" key={t.id}>
+                      <div className="trip-item-main">
+                        <div className="trip-item-top">
+                          <div className="trip-item-title-row">
+                            <i className="bi bi-car-front"></i>
+                            <strong>{t.title || "Property Tour"}</strong>
+                            <span className={`trip-status-chip ${status}`}>{statusLabel}</span>
+                          </div>
+                          <div className="trip-item-meta">
+                            <span><i className="bi bi-calendar3"></i> {formatDateTimeLabel(t.date, t.time)}</span>
+                          </div>
                         </div>
-                        <div className="trip-item-meta">
-                          <span><i className="bi bi-calendar3"></i> {formatDateTimeLabel(t.date, t.time)}</span>
+                        <div className="trip-item-label">PROPERTIES TO VISIT:</div>
+                        <div className="trip-chip-row">
+                          {selected.length ? selected.map((p) => (
+                            <span key={p.id} className="trip-property-chip">
+                              <span>{p.title}</span>
+                            </span>
+                          )) : <span className="small muted">No properties selected.</span>}
                         </div>
+                        {t.notes ? <div className="trip-notes-box">{t.notes}</div> : null}
                       </div>
-                      <div className="trip-item-label">PROPERTIES TO VISIT:</div>
-                      <div className="trip-chip-row">
-                        {selected.length ? selected.map((p) => (
-                          <span key={p.id} className="trip-property-chip">
-                            <span>{p.title}</span>
-                          </span>
-                        )) : <span className="small muted">No properties selected.</span>}
+                      <div className="trip-item-actions">
+                        {joined ? (
+                          <button
+                            className="btn btn-outline-dark btn-sm"
+                            onClick={async () => {
+                              try {
+                                const nextAttendees = tripAttendees(t).filter((member) => member !== user.username);
+                                const res = await apiRequest(`/api/trips/${t.id}`, {
+                                  method: "PATCH",
+                                  body: JSON.stringify({ attendees: nextAttendees })
+                                });
+                                const updatedTrip = res?.data;
+                                if (!updatedTrip?.id) throw new Error("Unable to update your tour attendance.");
+                                saveTripsLocal(trips.map((x) => (x.id === t.id ? updatedTrip : x)));
+                                feedback.notify("You left the tour.", "success");
+                              } catch (error) {
+                                feedback.notify(error?.message || "Unable to leave the tour.", "error");
+                              }
+                            }}
+                          >
+                            Leave Tour
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-dark btn-sm"
+                            onClick={async () => {
+                              try {
+                                const nextAttendees = Array.from(new Set([...tripAttendees(t), user.username]));
+                                const res = await apiRequest(`/api/trips/${t.id}`, {
+                                  method: "PATCH",
+                                  body: JSON.stringify({ attendees: nextAttendees })
+                                });
+                                const updatedTrip = res?.data;
+                                if (!updatedTrip?.id) throw new Error("Unable to update your tour attendance.");
+                                saveTripsLocal(trips.map((x) => (x.id === t.id ? updatedTrip : x)));
+                                feedback.notify("You joined the tour.", "success");
+                              } catch (error) {
+                                feedback.notify(error?.message || "Unable to join the tour.", "error");
+                              }
+                            }}
+                          >
+                            Join Tour
+                          </button>
+                        )}
                       </div>
-                      {t.notes ? <div className="trip-notes-box">{t.notes}</div> : null}
-                    </div>
-                    <div className="trip-item-actions">
-                      {joined ? (
-                        <button
-                          className="btn btn-outline-dark btn-sm"
-                          onClick={async () => {
-                            try {
-                              const nextAttendees = tripAttendees(t).filter((member) => member !== user.username);
-                              const res = await apiRequest(`/api/trips/${t.id}`, {
-                                method: "PATCH",
-                                body: JSON.stringify({ attendees: nextAttendees })
-                              });
-                              const updatedTrip = res?.data;
-                              if (!updatedTrip?.id) throw new Error("Unable to update your tour attendance.");
-                              saveTripsLocal(trips.map((x) => (x.id === t.id ? updatedTrip : x)));
-                              feedback.notify("You left the tour.", "success");
-                            } catch (error) {
-                              feedback.notify(error?.message || "Unable to leave the tour.", "error");
-                            }
-                          }}
-                        >
-                          Leave Tour
-                        </button>
-                      ) : (
-                        <button
-                          className="btn btn-dark btn-sm"
-                          onClick={async () => {
-                            try {
-                              const nextAttendees = Array.from(new Set([...tripAttendees(t), user.username]));
-                              const res = await apiRequest(`/api/trips/${t.id}`, {
-                                method: "PATCH",
-                                body: JSON.stringify({ attendees: nextAttendees })
-                              });
-                              const updatedTrip = res?.data;
-                              if (!updatedTrip?.id) throw new Error("Unable to update your tour attendance.");
-                              saveTripsLocal(trips.map((x) => (x.id === t.id ? updatedTrip : x)));
-                              feedback.notify("You joined the tour.", "success");
-                            } catch (error) {
-                              feedback.notify(error?.message || "Unable to join the tour.", "error");
-                            }
-                          }}
-                        >
-                          Join Tour
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-              {!upcomingTrips.length && <div className="agent-empty"><i className="bi bi-car-front"></i><p>No upcoming tours.</p></div>}
+                    </article>
+                  );
+                })}
+                {!upcomingTrips.length && (
+                  <div className="trips-empty">
+                    <i className="bi bi-car-front"></i>
+                    <p>No upcoming trips.</p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="trip-section-title mt-3">Past Tours</div>
-            <div className="trip-list-stack">
-              {pastTrips.map((t) => {
-                const status = tripStatus(t);
-                const statusLabel = status === "cancelled" ? "Cancelled" : "Completed";
-                return (
-                  <article className="trip-item-card trip-item-compact" key={t.id}>
-                    <div className="trip-item-title-row">
-                      <i className="bi bi-car-front"></i>
-                      <strong>{t.title || "Property Tour"}</strong>
-                      <span className={`trip-status-chip ${status}`}>{statusLabel}</span>
-                    </div>
-                    <div className="small muted">{formatDateTimeLabel(t.date, t.time)}</div>
-                  </article>
-                );
-              })}
-              {!pastTrips.length && <div className="agent-empty"><i className="bi bi-clock-history"></i><p>No past tours yet.</p></div>}
+            {/* Past */}
+            <div className="trips-section">
+              <div className="trips-section-header">
+                <span className="trips-section-label">Past Trips</span>
+                {pastTrips.length > 0 && <span className="trips-count-badge">{pastTrips.length}</span>}
+              </div>
+              <div className="trip-list-stack">
+                {pastTrips.map((t) => {
+                  const status = tripStatus(t);
+                  const statusLabel = status === "cancelled" ? "Cancelled" : "Completed";
+                  return (
+                    <article className="trip-item-card trip-item-compact" key={t.id}>
+                      <div className="trip-item-title-row">
+                        <i className="bi bi-car-front"></i>
+                        <strong>{t.title || "Property Tour"}</strong>
+                        <span className={`trip-status-chip ${status}`}>{statusLabel}</span>
+                      </div>
+                      <div className="small muted">{formatDateTimeLabel(t.date, t.time)}</div>
+                    </article>
+                  );
+                })}
+                {!pastTrips.length && (
+                  <div className="trips-empty">
+                    <i className="bi bi-clock-history"></i>
+                    <p>No past trips yet.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         )}
@@ -1656,15 +1726,14 @@ export default function CustomerDashboard() {
                   <div className="meet-mode-group">
                     <button
                       type="button"
-                      className={meetForm.mode === "office" ? "active" : ""}
+                      className="active"
                       onClick={() => setMeetForm((s) => ({ ...s, mode: "office" }))}
                     >
                       <i className="bi bi-building"></i>In Office
                     </button>
                     <button
                       type="button"
-                      className={meetForm.mode === "virtual" ? "active" : ""}
-                      onClick={() => setMeetForm((s) => ({ ...s, mode: "virtual" }))}
+                      onClick={() => navigate("/customer/meets/virtual")}
                     >
                       <i className="bi bi-camera-video"></i>Virtual
                     </button>

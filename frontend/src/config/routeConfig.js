@@ -8,6 +8,7 @@ import AgentAddPropertyPage from "../pages/dashboard/AgentAddPropertyPage.jsx";
 import AgentScheduleTripPage from "../pages/dashboard/AgentScheduleTripPage.jsx";
 import AgentDashboardPage from "../pages/dashboard/AgentDashboardPage.jsx";
 import CustomerDashboardPage from "../pages/dashboard/CustomerDashboardPage.jsx";
+import VirtualMeetingPage from "../pages/dashboard/VirtualMeetingPage.jsx";
 import NotificationsPage from "../pages/notifications/NotificationsPage.jsx";
 import HomePage from "../pages/public/HomePage.jsx";
 import PropertyDetailsPage from "../pages/public/PropertyDetailsPage.jsx";
@@ -27,5 +28,7 @@ export const dashboardRoutes = Object.freeze({
   agent: createElement(AgentDashboardPage),
   agentAddProperty: createElement(AgentAddPropertyPage),
   agentScheduleTrip: createElement(AgentScheduleTripPage),
-  customer: createElement(CustomerDashboardPage)
+  agentVirtualMeeting: createElement(VirtualMeetingPage, { role: "agent" }),
+  customer: createElement(CustomerDashboardPage),
+  customerVirtualMeeting: createElement(VirtualMeetingPage, { role: "customer" })
 });

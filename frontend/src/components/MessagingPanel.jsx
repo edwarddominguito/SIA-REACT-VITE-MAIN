@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, streamRequest } from "@/api/client.js";
 import { getCurrentUser } from "@/services/storageService.js";
 import useMessageScrollPhysics from "@/hooks/useMessageScrollPhysics.js";
@@ -47,7 +47,7 @@ const buildMessagingCacheKey = (userLike) => {
   return `messagingPanel:${role}:${username}`;
 };
 
-const readMessagingCache = (cacheKey) => {
+const readMessagingCache = (cacheKey, expectedShowArchived = false) => {
   if (!cacheKey || typeof window === "undefined" || !window.sessionStorage) {
     return { contacts: [], selectedContact: "", threads: {} };
   }
@@ -55,8 +55,10 @@ const readMessagingCache = (cacheKey) => {
     const raw = window.sessionStorage.getItem(cacheKey);
     if (!raw) return { contacts: [], selectedContact: "", threads: {} };
     const parsed = JSON.parse(raw);
-    const contacts = Array.isArray(parsed?.contacts) ? parsed.contacts : [];
-    const selectedContact = String(parsed?.selectedContact || "").trim();
+    const cachedShowArchived = Boolean(parsed?.showArchived);
+    const useCachedContacts = cachedShowArchived === Boolean(expectedShowArchived);
+    const contacts = useCachedContacts && Array.isArray(parsed?.contacts) ? parsed.contacts : [];
+    const selectedContact = useCachedContacts ? String(parsed?.selectedContact || "").trim() : "";
     const rawThreads = parsed?.threads && typeof parsed.threads === "object" ? parsed.threads : {};
     const threads = Object.fromEntries(
       Object.entries(rawThreads).map(([key, value]) => [
@@ -144,6 +146,9 @@ const sortContactsByActivity = (items) =>
     if (hasTimeA !== hasTimeB) return hasTimeB - hasTimeA;
     return String(a?.fullName || a?.username || "").localeCompare(String(b?.fullName || b?.username || ""));
   });
+
+const contactKeyOf = (contact) =>
+  String(contact?.username || contact?.id || "").trim();
 
 const contactLabel = (contact) => {
   if (!contact) return "Select a contact";
@@ -251,6 +256,8 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
   const [isSending, setIsSending] = useState(false);
   const [transport, setTransport] = useState(DEFAULT_TRANSPORT);
   const [isStreamConnected, setIsStreamConnected] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [pendingThreadAction, setPendingThreadAction] = useState("");
   const searchInputRef = useRef(null);
   const threadBodyRef = useRef(null);
   const forceScrollRef = useRef(false);
@@ -260,6 +267,10 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
   const threadCacheRef = useRef({});
   const messagesRef = useRef([]);
   const initialThreadSnapRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const showArchivedRef = useRef(false);
+  const loadContactsRef = useRef(null);
+  const didInitViewRef = useRef(false);
   const {
     unreadCount,
     showJumpPill,
@@ -274,6 +285,17 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
     followThreshold: THREAD_BOTTOM_THRESHOLD_PX + 24,
     smoothDuration: 260
   });
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    showArchivedRef.current = showArchived;
+  }, [showArchived]);
 
   useEffect(() => {
     selectedContactRef.current = selectedContact;
@@ -322,7 +344,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
   }, [contacts, normalizedPreferredContact]);
 
   useEffect(() => {
-    const cached = readMessagingCache(cacheKey);
+    const cached = readMessagingCache(cacheKey, false);
     const cachedContacts = sortContactsByActivity(Array.isArray(cached.contacts) ? cached.contacts : []);
     const nextSelectedContact = resolveSelectedContact(cachedContacts, cached.selectedContact);
     contactsRef.current = cachedContacts;
@@ -341,12 +363,16 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
     const nextSelectedContact = Object.prototype.hasOwnProperty.call(overrides, "selectedContact")
       ? String(overrides.selectedContact || "").trim()
       : selectedContactRef.current;
+    const nextShowArchived = Object.prototype.hasOwnProperty.call(overrides, "showArchived")
+      ? Boolean(overrides.showArchived)
+      : showArchivedRef.current;
     const nextThreads = overrides.threads && typeof overrides.threads === "object"
       ? overrides.threads
       : threadCacheRef.current;
     writeMessagingCache(cacheKey, {
       contacts: nextContacts,
       selectedContact: nextSelectedContact,
+      showArchived: nextShowArchived,
       threads: nextThreads
     });
   };
@@ -369,45 +395,88 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
     }
   };
 
+  const clearThreadMessages = (contactKey) => {
+    const normalizedContactKey = String(contactKey || "").trim();
+    if (!normalizedContactKey) return;
+    const nextThreads = { ...threadCacheRef.current };
+    delete nextThreads[normalizedContactKey];
+    threadCacheRef.current = nextThreads;
+    persistMessagingCache({ threads: nextThreads });
+    if (normalizedContactKey === selectedContactRef.current) {
+      setMessages([]);
+    }
+  };
+
+  const loadContacts = useCallback(async ({
+    showLoading = true,
+    preferredContact: preferredContactOverride = null
+  } = {}) => {
+    if (showLoading) setIsLoadingContacts(true);
+    try {
+      const query = showArchived ? "?archived=1" : "?archived=0";
+      const res = await apiRequest(`/api/messages/contacts${query}`, { method: "GET" });
+      if (!isMountedRef.current) return [];
+      const nextContacts = sortContactsByActivity(Array.isArray(res?.data) ? res.data : []);
+      setContacts(nextContacts);
+      contactsRef.current = nextContacts;
+      setTransport(normalizeTransportMeta(res?.meta));
+      setSelectedContact((prev) => {
+        const nextSelectedContact = resolveSelectedContact(
+          nextContacts,
+          preferredContactOverride === null ? (prev || selectedContactRef.current) : preferredContactOverride
+        );
+        selectedContactRef.current = nextSelectedContact;
+        persistMessagingCache({
+          contacts: nextContacts,
+          selectedContact: nextSelectedContact,
+          showArchived
+        });
+        return nextSelectedContact;
+      });
+      return nextContacts;
+    } catch (error) {
+      if (isMountedRef.current) {
+        feedback?.notify(error?.message || "Unable to load message contacts.", "error");
+      }
+      return [];
+    } finally {
+      if (isMountedRef.current && showLoading) setIsLoadingContacts(false);
+    }
+  }, [feedback, showArchived]);
+
   useEffect(() => {
-    let cancelled = false;
+    loadContactsRef.current = loadContacts;
+  }, [loadContacts]);
+
+  useEffect(() => {
+    if (!didInitViewRef.current) {
+      didInitViewRef.current = true;
+      return;
+    }
+    contactsRef.current = [];
+    selectedContactRef.current = "";
+    setContacts([]);
+    setSelectedContact("");
+    setMessages([]);
+    persistMessagingCache({
+      contacts: [],
+      selectedContact: "",
+      showArchived
+    });
+  }, [showArchived]);
+
+  useEffect(() => {
     let intervalId = null;
     const pollIntervalMs = isStreamConnected ? STREAM_CONNECTED_POLL_INTERVAL_MS : FALLBACK_POLL_INTERVAL_MS;
-
-    const loadContacts = async (showLoading = true) => {
-      if (showLoading) setIsLoadingContacts(true);
-      try {
-        const res = await apiRequest("/api/messages/contacts", { method: "GET" });
-        if (cancelled) return;
-        const nextContacts = sortContactsByActivity(Array.isArray(res?.data) ? res.data : []);
-        setContacts(nextContacts);
-        contactsRef.current = nextContacts;
-        setTransport(normalizeTransportMeta(res?.meta));
-        setSelectedContact((prev) => {
-          const nextSelectedContact = resolveSelectedContact(nextContacts, prev || selectedContactRef.current);
-          selectedContactRef.current = nextSelectedContact;
-          persistMessagingCache({ contacts: nextContacts, selectedContact: nextSelectedContact });
-          return nextSelectedContact;
-        });
-      } catch (error) {
-        if (!cancelled) {
-          feedback?.notify(error?.message || "Unable to load message contacts.", "error");
-        }
-      } finally {
-        if (!cancelled && showLoading) setIsLoadingContacts(false);
-      }
-    };
-
-    loadContacts(true);
+    loadContacts({ showLoading: true });
     intervalId = window.setInterval(() => {
-      loadContacts(false);
+      loadContacts({ showLoading: false });
     }, pollIntervalMs);
 
     return () => {
-      cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
-  }, [feedback, isStreamConnected]);
+  }, [isStreamConnected, loadContacts]);
 
   useEffect(() => {
     if (!selectedContact) {
@@ -506,6 +575,13 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
 
             setStreamConnectionState(true);
             if (data.contactSummary) {
+              if (showArchivedRef.current) {
+                loadContactsRef.current?.({
+                  showLoading: false,
+                  preferredContact: selectedContactRef.current || ""
+                });
+                return;
+              }
               setContacts((prev) => {
                 const nextContacts = mergeContactSummary(prev, data.contactSummary);
                 contactsRef.current = nextContacts;
@@ -515,6 +591,12 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
             }
 
             if ((event === "message_created" || data.type === "message_created") && data.message) {
+              if (showArchivedRef.current) {
+                loadContactsRef.current?.({
+                  showLoading: false,
+                  preferredContact: selectedContactRef.current || ""
+                });
+              }
               if (data.contactUsername && data.contactUsername === selectedContactRef.current) {
                 const shouldFollowThread = data.message.isOwn || isNearBottom(threadBodyRef.current, THREAD_BOTTOM_THRESHOLD_PX + 24);
                 forceScrollRef.current = shouldFollowThread;
@@ -588,7 +670,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
   }, [isLoadingMessages, messages.length, selectedContact]);
 
   const activeContact = useMemo(
-    () => contacts.find((item) => item.username === selectedContact || item.id === selectedContact) || null,
+    () => contacts.find((item) => contactKeyOf(item) === selectedContact) || null,
     [contacts, selectedContact]
   );
 
@@ -611,6 +693,15 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
   }, [contacts, search]);
 
   const activeAvatarLabel = activeContact ? initialsFrom(contactLabel(activeContact)) : "+";
+  const isThreadActionPending = Boolean(pendingThreadAction);
+  const hasSearch = Boolean(String(search || "").trim());
+  const contactCountText = showArchived
+    ? `${filteredContacts.length} archived ${filteredContacts.length === 1 ? "conversation" : "conversations"}`
+    : `${filteredContacts.length} contacts available`;
+  const contactGroupLabel = showArchived ? "Archived conversations" : "Available contacts";
+  const emptyContactsText = hasSearch
+    ? `No ${showArchived ? "archived conversations" : "contacts"} match your search.`
+    : (showArchived ? "No archived conversations yet." : "No contacts are available for your role yet.");
 
   const helperText = useMemo(() => {
     const streamLabel = isStreamConnected ? "Realtime updates are connected." : "Realtime updates are reconnecting; REST polling is active.";
@@ -626,7 +717,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
   const sendMessage = async (event) => {
     event.preventDefault();
     const content = String(draft || "").trim();
-    if (!activeContact || !content || isSending) return;
+    if (!activeContact || !content || isSending || isThreadActionPending) return;
 
     try {
       setIsSending(true);
@@ -642,23 +733,36 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
         forceScrollRef.current = true;
         notifyOwnMessage();
         updateThreadMessages(selectedContactRef.current, (prev) => mergeMessageList(prev, nextMessage));
-        setContacts((prev) => {
-          const nextContacts = mergeContactSummary(prev, {
-            ...activeContact,
-            lastMessage: nextMessage.content || "",
-            lastMessageAt: nextMessage.createdAt || ""
+        if (!showArchived) {
+          setContacts((prev) => {
+            const nextContacts = mergeContactSummary(prev, {
+              ...activeContact,
+              lastMessage: nextMessage.content || "",
+              lastMessageAt: nextMessage.createdAt || ""
+            });
+            contactsRef.current = nextContacts;
+            persistMessagingCache({ contacts: nextContacts });
+            return nextContacts;
           });
-          contactsRef.current = nextContacts;
-          persistMessagingCache({ contacts: nextContacts });
-          return nextContacts;
-        });
+        }
       }
       setTransport(normalizeTransportMeta(res?.meta));
       setDraft("");
+      if (showArchived) {
+        selectedContactRef.current = "";
+        setSelectedContact("");
+        setMessages([]);
+        await loadContacts({ showLoading: false, preferredContact: "" });
+      }
       if (res?.meta?.warning) {
         feedback?.notify(res.meta.warning, "info");
       } else {
-        feedback?.notify(transport.smsMirrorConfigured ? "Message sent." : "Message sent in-app.", "success");
+        feedback?.notify(
+          showArchived
+            ? "Message sent. Conversation moved to inbox."
+            : (transport.smsMirrorConfigured ? "Message sent." : "Message sent in-app."),
+          "success"
+        );
       }
     } catch (error) {
       const failedRecord = error?.data;
@@ -673,9 +777,88 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
     }
   };
 
+  const handleArchiveToggle = async () => {
+    if (!activeContact || isThreadActionPending) return;
+    const targetContact = activeContact;
+    const contactKey = contactKeyOf(targetContact);
+    if (!contactKey) return;
+    const nextArchived = !showArchived;
+    const actionLabel = nextArchived ? "archive" : "unarchive";
+
+    try {
+      setPendingThreadAction(actionLabel);
+      await apiRequest(`/api/messages/contacts/${encodeURIComponent(contactKey)}/thread`, {
+        method: "PATCH",
+        body: JSON.stringify({ archived: nextArchived })
+      });
+      const movesOutOfCurrentView = showArchived !== nextArchived;
+      if (movesOutOfCurrentView) {
+        selectedContactRef.current = "";
+        setSelectedContact("");
+        setMessages([]);
+      }
+      await loadContacts({
+        showLoading: false,
+        preferredContact: movesOutOfCurrentView ? "" : contactKey
+      });
+      feedback?.notify(nextArchived ? "Conversation archived." : "Conversation moved back to inbox.", "success");
+    } catch (error) {
+      feedback?.notify(error?.message || "Unable to update this conversation.", "error");
+    } finally {
+      setPendingThreadAction("");
+    }
+  };
+
+  const handleDeleteThread = () => {
+    if (!activeContact || isThreadActionPending) return;
+    const targetContact = activeContact;
+    const contactKey = contactKeyOf(targetContact);
+    if (!contactKey) return;
+
+    feedback?.askConfirm({
+      title: "Delete Conversation",
+      message: `Delete your conversation with ${contactLabel(targetContact)}? This clears the thread from your view until a new message appears.`,
+      confirmText: "Delete",
+      cancelText: "Keep",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          setPendingThreadAction("delete");
+          await apiRequest(`/api/messages/contacts/${encodeURIComponent(contactKey)}/thread`, {
+            method: "DELETE"
+          });
+          clearThreadMessages(contactKey);
+          setDraft("");
+          const clearsCurrentView = showArchived;
+          if (clearsCurrentView) {
+            selectedContactRef.current = "";
+            setSelectedContact("");
+            setMessages([]);
+          }
+          await loadContacts({
+            showLoading: false,
+            preferredContact: clearsCurrentView ? "" : contactKey
+          });
+          feedback?.notify("Conversation deleted.", "success");
+        } catch (error) {
+          feedback?.notify(error?.message || "Unable to delete this conversation.", "error");
+        } finally {
+          setPendingThreadAction("");
+        }
+      }
+    });
+  };
+
   const handleStartConversation = () => {
     setDraft("");
     setSearch("");
+    if (showArchived) {
+      setShowArchived(false);
+      window.requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
+      return;
+    }
     const fallbackContact = resolveSelectedContact(contactsRef.current, selectedContactRef.current);
     if (fallbackContact) {
       selectedContactRef.current = fallbackContact;
@@ -691,10 +874,29 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
         <div className="messaging-list-head">
           <div>
             <h3>Messages</h3>
-            <p>{filteredContacts.length} contacts available</p>
+            <p>{contactCountText}</p>
           </div>
           <button type="button" className="messaging-icon-btn" aria-label="Start a conversation" onClick={handleStartConversation}>
             <i className="bi bi-plus-lg"></i>
+          </button>
+        </div>
+
+        <div className="messaging-view-toggle" role="tablist" aria-label="Conversation views">
+          <button
+            type="button"
+            className={`messaging-view-toggle-btn ${showArchived ? "" : "active"}`}
+            aria-pressed={!showArchived}
+            onClick={() => setShowArchived(false)}
+          >
+            Inbox
+          </button>
+          <button
+            type="button"
+            className={`messaging-view-toggle-btn ${showArchived ? "active" : ""}`}
+            aria-pressed={showArchived}
+            onClick={() => setShowArchived(true)}
+          >
+            Archived
           </button>
         </div>
 
@@ -703,20 +905,20 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
           <input
             ref={searchInputRef}
             type="search"
-            placeholder="Search contacts"
+            placeholder={showArchived ? "Search archived" : "Search contacts"}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
 
-        <div className="messaging-group-label">Available contacts</div>
+        <div className="messaging-group-label">{contactGroupLabel}</div>
         <div className="messaging-contact-list">
           {filteredContacts.map((contact) => (
             <button
               key={contact.id || contact.username}
               type="button"
-              className={`messaging-contact-item ${activeContact?.username === contact.username ? "active" : ""}`}
-              onClick={() => setSelectedContact(contact.username || contact.id)}
+              className={`messaging-contact-item ${contactKeyOf(activeContact) === contactKeyOf(contact) ? "active" : ""}`}
+              onClick={() => setSelectedContact(contactKeyOf(contact))}
             >
               <div className={`messaging-contact-avatar ${avatarColorClass(contact)}`}>{initialsFrom(contactLabel(contact))}</div>
               <div className="messaging-contact-main">
@@ -732,9 +934,7 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
               </div>
             </button>
           ))}
-          {!isLoadingContacts && !filteredContacts.length && (
-            <div className="messaging-empty">No contacts are available for your role yet.</div>
-          )}
+          {!isLoadingContacts && !filteredContacts.length && <div className="messaging-empty">{emptyContactsText}</div>}
           {isLoadingContacts && <div className="messaging-empty">Loading contacts...</div>}
         </div>
       </div>
@@ -747,11 +947,40 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
               <strong>{activeContact ? contactLabel(activeContact) : "Start a conversation"}</strong>
               <div className="small muted">
                 {activeContact
-                  ? <><span className={roleBadgeClass(activeContact.role)}>{formatStatusLabel(activeContact.role)}</span> <span style={{margin:'0 2px'}}>|</span> {activeContact.smsPhone || activeContact.phone || "No phone number on file"}</>
+                  ? (
+                    <>
+                      <span className={roleBadgeClass(activeContact.role)}>{formatStatusLabel(activeContact.role)}</span>
+                      <span style={{ margin: "0 2px" }}>|</span>
+                      {activeContact.smsPhone || activeContact.phone || "No phone number on file"}
+                      {showArchived ? <span className="messaging-thread-state-pill">Archived</span> : null}
+                    </>
+                  )
                   : "Choose a contact to open a conversation."}
               </div>
             </div>
           </div>
+          {activeContact ? (
+            <div className="messaging-thread-actions">
+              <button
+                type="button"
+                className="messaging-thread-action-btn"
+                onClick={handleArchiveToggle}
+                disabled={isThreadActionPending || isSending}
+              >
+                <i className={`bi ${pendingThreadAction === "archive" || pendingThreadAction === "unarchive" ? "bi-hourglass-split" : (showArchived ? "bi-arrow-counterclockwise" : "bi-archive")}`}></i>
+                <span>{showArchived ? "Unarchive" : "Archive"}</span>
+              </button>
+              <button
+                type="button"
+                className="messaging-thread-action-btn danger"
+                onClick={handleDeleteThread}
+                disabled={isThreadActionPending || isSending}
+              >
+                <i className={`bi ${pendingThreadAction === "delete" ? "bi-hourglass-split" : "bi-trash3"}`}></i>
+                <span>Delete</span>
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div ref={threadBodyRef} className="messaging-thread-body">
@@ -835,9 +1064,9 @@ export default function MessagingPanel({ currentUser, feedback, preferredContact
               placeholder={activeContact ? `Type your message to ${contactLabel(activeContact)}...` : "Select a contact first"}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              disabled={!activeContact || isSending}
+              disabled={!activeContact || isSending || isThreadActionPending}
             ></textarea>
-            <button className="messaging-send-btn" disabled={!activeContact || !draft.trim() || isSending}>
+            <button className="messaging-send-btn" disabled={!activeContact || !draft.trim() || isSending || isThreadActionPending}>
               <i className={`bi ${isSending ? "bi-hourglass-split" : "bi-send-fill"}`}></i>
             </button>
           </div>

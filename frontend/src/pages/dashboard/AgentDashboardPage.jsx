@@ -741,7 +741,25 @@ export default function AgentDashboard() {
 
   if (!user) return null;
 
-  const currentSectionLabel = AGENT_NAV_ITEMS.find((item) => item.id === section)?.label || "Dashboard";
+  const currentSectionLabel = section === "dashboard"
+    ? "Overview"
+    : section === "properties"
+    ? "My Listings"
+    : section === "appointments"
+    ? "Client Appointments"
+    : section === "meets"
+    ? "Office Meetings"
+    : section === "trips"
+    ? "Trip Scheduler"
+    : section === "calendar"
+    ? "My Calendar"
+    : section === "messages"
+    ? "Inbox"
+    : section === "reviews"
+    ? "Client Feedback"
+    : section === "profile"
+    ? "My Account"
+    : AGENT_NAV_ITEMS.find((item) => item.id === section)?.label || "Overview";
   const handleSectionChange = (nextSection) => {
     setSection(nextSection);
     if (nextSection !== "messages") {
@@ -788,7 +806,7 @@ export default function AgentDashboard() {
                 }
                 if (!isWithinOperatingHours(date, time)) {
                   if (tripOperatingHours.isClosed) {
-                    feedback.notify("Tours are not available on Sunday.", "error");
+                    feedback.notify("Trips are not available on Sunday.", "error");
                   } else {
                     feedback.notify(`Tour time must be within ${tripOperatingHours.label}.`, "error");
                   }
@@ -973,74 +991,88 @@ export default function AgentDashboard() {
             ))}
           </datalist>
         ) : null}
+        <section className="agent-hero">
+          <div>
+            <h1>{currentSectionLabel}</h1>
+          </div>
+        </section>
         {section === "dashboard" && (
           <>
-            <section className="agent-panel">
-              <div className="agent-panel-head">
-                <h3>My Listings</h3>
-                <button className="btn btn-dark btn-sm" onClick={() => setSection("properties")}>
-                  Manage Properties
-                </button>
+            <section className="dash-stats">
+              <div className="dash-stat">
+                <div className="dash-stat-icon blue"><i className="bi bi-house-door"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{mineProps.length}</span>
+                  <span className="dash-stat-label">Listings</span>
+                </div>
+                <span className="dash-stat-sub">{mineProps.filter(p => normalizePropertyStatus(p.propertyStatus || p.status) === "available").length} available</span>
               </div>
-              <div className="agent-property-grid">
-                {mineProps.slice(0, 3).map((p) => {
-                  const normalizedStatus = normalizePropertyStatus(p.propertyStatus || p.status);
-                  return (
-                  <article key={p.id} className="agent-property-card">
-                    <img
-                      src={withImage(p)}
-                      alt={p.title}
-                      onError={(e) => handlePropertyImageError(e, p)}
-                    />
-                    <div className="agent-property-body">
-                      <div className="d-flex justify-content-between align-items-center gap-2">
-                        <h4>{p.title}</h4>
-                        <span className={`badge badge-soft status-${normalizedStatus}`}>
-                          {propertyStatusLabel(p)}
-                        </span>
-                      </div>
-                      <p><i className="bi bi-geo-alt"></i> {p.location}</p>
-                      <strong>{propertyPriceLabel(p)}</strong>
-                      <div className="agent-property-actions">
-                        <Link className="btn btn-outline-dark btn-sm w-100" to={`/properties/${p.id}`} state={propertyLinkState}>
-                          Details
-                        </Link>
-                      </div>
-                    </div>
-                  </article>
-                  );
-                })}
-                {!mineProps.length && (
-                  <div className="agent-empty">
-                    <i className="bi bi-house-door"></i>
-                    <p>You do not have property listings yet.</p>
-                  </div>
-                )}
+              <div className="dash-stat">
+                <div className="dash-stat-icon amber"><i className="bi bi-calendar2-week"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{mineApps.length}</span>
+                  <span className="dash-stat-label">Appointments</span>
+                </div>
+                <span className="dash-stat-sub">{mineApps.filter(a => normalizeWorkflowStatus(a.status, "appointment") === "pending").length} pending</span>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon green"><i className="bi bi-car-front"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{mineTrips.length}</span>
+                  <span className="dash-stat-label">Trips</span>
+                </div>
+                <span className="dash-stat-sub">{upcomingAgentTrips.length} upcoming</span>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon violet"><i className="bi bi-star"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{mineReviews.length}</span>
+                  <span className="dash-stat-label">Reviews</span>
+                </div>
+                <span className="dash-stat-sub">{mineReviews.filter(r => !r.addressedAt).length} need action</span>
               </div>
             </section>
 
-            <section className="agent-panel">
-              <div className="agent-panel-head">
-                <h3>Upcoming Appointments</h3>
-                <span className="badge badge-soft">{mineApps.length}</span>
-              </div>
-              <div className="agent-stack">
-                {sortedMineApps.slice(0, 4).map((a) => (
-                  <div className="agent-mini-row" key={a.id}>
-                    <div>
-                      <div className="fw-bold">{a.propertyTitle}</div>
-                      <div className="small muted">{formatDateTimeLabel(a.date, a.time, { joiner: " at " })}</div>
+            <section className="dash-bottom-grid">
+              <article className="dash-card">
+                <div className="dash-card-head">
+                  <h3>My Listings</h3>
+                  <button className="btn btn-dark btn-sm" onClick={() => setSection("properties")}>View All</button>
+                </div>
+                <div className="dash-activity-list">
+                  {mineProps.slice(0, 4).map((p) => (
+                    <div key={p.id} className="dash-activity-row">
+                      <i className="bi bi-house-door dash-activity-icon"></i>
+                      <div className="dash-activity-body">
+                        <strong>{p.title}</strong>
+                        <span className="dash-activity-meta">{p.location} · {propertyPriceLabel(p)}</span>
+                      </div>
+                      <span className={`badge badge-soft status-${normalizePropertyStatus(p.propertyStatus || p.status)}`}>{propertyStatusLabel(p)}</span>
                     </div>
-                    <span className={statusBadgeClass(a.status)}>{a.status || "pending"}</span>
-                  </div>
-                ))}
-                {!sortedMineApps.length && (
-                  <div className="agent-empty compact">
-                    <i className="bi bi-calendar2"></i>
-                    <p>No upcoming appointments.</p>
-                  </div>
-                )}
-              </div>
+                  ))}
+                  {!mineProps.length && <div className="agent-empty compact"><i className="bi bi-house-door"></i><p>No listings yet.</p></div>}
+                </div>
+              </article>
+
+              <article className="dash-card">
+                <div className="dash-card-head">
+                  <h3>Upcoming Appointments</h3>
+                  <span className="badge badge-soft">{mineApps.length}</span>
+                </div>
+                <div className="dash-activity-list">
+                  {sortedMineApps.slice(0, 5).map((a) => (
+                    <div className="dash-activity-row" key={a.id}>
+                      <i className="bi bi-calendar2-check dash-activity-icon"></i>
+                      <div className="dash-activity-body">
+                        <strong>{a.propertyTitle}</strong>
+                        <span className="dash-activity-meta">{formatDateTimeLabel(a.date, a.time, { joiner: " at " })}</span>
+                      </div>
+                      <span className={statusBadgeClass(a.status)}>{a.status || "pending"}</span>
+                    </div>
+                  ))}
+                  {!sortedMineApps.length && <div className="agent-empty compact"><i className="bi bi-calendar2"></i><p>No upcoming appointments.</p></div>}
+                </div>
+              </article>
             </section>
           </>
         )}
@@ -1048,7 +1080,7 @@ export default function AgentDashboard() {
         {section === "calendar" && (
           <DashboardCalendar
             title="My Calendar"
-            subtitle="Track your assigned appointments, office meets, and tours."
+            subtitle="Track your assigned appointments, office meets, and trips."
             events={agentCalendarEvents}
             storageKey="dashboard-calendar-cursor:agent"
           />
@@ -1523,23 +1555,35 @@ export default function AgentDashboard() {
 
         {section === "reviews" && (
           <>
-            <section className="agent-stats-grid reviews-stats-grid">
-              <article className="agent-stat-card">
-                <div className="agent-stat-top"><span>Total Reviews</span><i className="bi bi-chat-left-text"></i></div>
-                <strong>{mineReviews.length}</strong>
-              </article>
-              <article className="agent-stat-card">
-                <div className="agent-stat-top"><span>Average Rating</span><i className="bi bi-star-fill"></i></div>
-                <strong>{mineReviews.length ? `${avgReviewRating.toFixed(1)}/5` : "-"}</strong>
-              </article>
-              <article className="agent-stat-card">
-                <div className="agent-stat-top"><span>Needs Action</span><i className="bi bi-exclamation-circle"></i></div>
-                <strong>{pendingReviewCount}</strong>
-              </article>
-              <article className="agent-stat-card">
-                <div className="agent-stat-top"><span>Low Ratings</span><i className="bi bi-emoji-frown"></i></div>
-                <strong>{lowRatingCount}</strong>
-              </article>
+            <section className="dash-stats">
+              <div className="dash-stat">
+                <div className="dash-stat-icon blue"><i className="bi bi-chat-left-text"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{mineReviews.length}</span>
+                  <span className="dash-stat-label">Reviews</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon amber"><i className="bi bi-star-fill"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{mineReviews.length ? `${avgReviewRating.toFixed(1)}/5` : "-"}</span>
+                  <span className="dash-stat-label">Avg Rating</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon green"><i className="bi bi-exclamation-circle"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{pendingReviewCount}</span>
+                  <span className="dash-stat-label">Needs Action</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon violet"><i className="bi bi-emoji-frown"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{lowRatingCount}</span>
+                  <span className="dash-stat-label">Low Ratings</span>
+                </div>
+              </div>
             </section>
 
             <section className="agent-panel">
@@ -1650,7 +1694,7 @@ export default function AgentDashboard() {
             <section className="agent-panel">
               {mineTrips.length ? (
                 <>
-                  <div className="trip-section-title">Upcoming Tours</div>
+                  <div className="trip-section-title">Upcoming Trips</div>
                   <div className="trip-list-stack">
                     {upcomingAgentTrips.map((t) => {
                       const status = tripStatus(t);
@@ -1753,10 +1797,10 @@ export default function AgentDashboard() {
                         </article>
                       );
                     })}
-                    {!upcomingAgentTrips.length && <div className="agent-empty"><i className="bi bi-car-front"></i><p>No upcoming tours.</p></div>}
+                    {!upcomingAgentTrips.length && <div className="agent-empty"><i className="bi bi-car-front"></i><p>No upcoming trips.</p></div>}
                   </div>
 
-                  <div className="trip-section-title mt-3">Past Tours</div>
+                  <div className="trip-section-title mt-3">Past Trips</div>
                   <div className="trip-list-stack">
                     {pastAgentTrips.map((t) => {
                       const status = tripStatus(t);
@@ -1772,13 +1816,13 @@ export default function AgentDashboard() {
                         </article>
                       );
                     })}
-                    {!pastAgentTrips.length && <div className="agent-empty"><i className="bi bi-clock-history"></i><p>No past tours yet.</p></div>}
+                    {!pastAgentTrips.length && <div className="agent-empty"><i className="bi bi-clock-history"></i><p>No past trips yet.</p></div>}
                   </div>
                 </>
               ) : (
                 <div className="agent-empty large trip-empty-clean">
                   <i className="bi bi-car-front"></i>
-                  <h4>No tours scheduled</h4>
+                  <h4>No trips scheduled</h4>
                   <p>Schedule a property tour to get started.</p>
                 </div>
               )}
@@ -1789,6 +1833,8 @@ export default function AgentDashboard() {
         {section === "meets" && (
           <>
             <section className="agent-panel meets-panel-inner">
+
+
               <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid var(--line-soft)" }}>
                 <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
                   <i className="bi bi-search" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", fontSize: "0.85rem", pointerEvents: "none" }} />

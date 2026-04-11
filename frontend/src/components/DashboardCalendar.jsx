@@ -7,7 +7,7 @@ const TYPE_META = {
   all: { label: "All events", shortLabel: "All", icon: "bi-grid-1x2" },
   appointment: { label: "Appointments", shortLabel: "Appointments", icon: "bi-calendar2-check" },
   meet: { label: "Office Meetings", shortLabel: "Meetings", icon: "bi-building" },
-  trip: { label: "Property Tours", shortLabel: "Tours", icon: "bi-car-front" },
+  trip: { label: "Property Trips", shortLabel: "Trips", icon: "bi-car-front" },
   event: { label: "Other Events", shortLabel: "Other", icon: "bi-calendar-event" }
 };
 
@@ -395,7 +395,6 @@ export default function DashboardCalendar({
                 </div>
 
                 <div className="dashboard-calendar-overview-copy">
-                  <small>{headKicker}</small>
                   <strong>{monthLabel}</strong>
                   <span>{monthRangeLabel}</span>
                   {nextUpcoming && (

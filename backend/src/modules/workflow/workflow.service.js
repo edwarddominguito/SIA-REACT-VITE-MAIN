@@ -158,6 +158,7 @@ api.patch("/appointments/:id", requireRole(["admin", "agent", "customer"]), asyn
   const requestedDate = req.body?.date === undefined ? "" : clean(req.body?.date, 20);
   const requestedTime = req.body?.time === undefined ? "" : clean(req.body?.time, 10);
   const requestedAssignedAgent = req.body?.assignedAgent === undefined ? "" : clean(req.body?.assignedAgent, 60);
+  const hasAssignedAgentChange = req.body?.assignedAgent !== undefined;
   const notes = req.body?.notes === undefined ? "" : clean(req.body?.notes, 1500);
   const outcomeNotes = req.body?.outcomeNotes === undefined ? "" : clean(req.body?.outcomeNotes, 1500);
   const cancelReason = req.body?.cancelReason === undefined ? "" : clean(req.body?.cancelReason, 500);
@@ -216,22 +217,26 @@ api.patch("/appointments/:id", requireRole(["admin", "agent", "customer"]), asyn
       throw err;
     }
 
-    let assignedAgent = current.assignedAgent || current.agent || "";
-    if (requestedAssignedAgent) {
+    let assignedAgent = current.assignedAgent || "";
+    if (hasAssignedAgentChange) {
       if (context.role !== "admin") {
         const err = new Error("Only admin can assign or reassign agents.");
         err.statusCode = 403;
         throw err;
       }
-      const agentRecord = assertRoleUser(db, requestedAssignedAgent, "agent", "Agent not found.");
-      assignedAgent = agentRecord.username;
+      if (requestedAssignedAgent) {
+        const agentRecord = assertRoleUser(db, requestedAssignedAgent, "agent", "Agent not found.");
+        assignedAgent = agentRecord.username;
+      } else {
+        assignedAgent = ""; // explicit unassign by admin
+      }
     }
 
     const appointments = db.appointments.slice();
     appointments[idx] = sanitizeAppointmentRecord({
       ...current,
       assignedAgent,
-      agent: assignedAgent || current.agent || "",
+      agent: current.agent || "",
       date: nextDate,
       time: nextTime,
       status: nextStatus,

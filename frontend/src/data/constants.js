@@ -13,12 +13,12 @@ export const CURRENT_USER_KEY = "currentUser";
 export const SESSION_SCOPED_DATA_KEYS = Object.freeze([...SYNC_KEYS]);
 
 export const ADMIN_NAV_ITEMS = Object.freeze([
-  { id: "dashboard", label: "Command Center", icon: "bi-grid" },
+  { id: "dashboard", label: "Dashboard", icon: "bi-grid" },
   { id: "users", label: "Users", icon: "bi-people" },
   { id: "properties", label: "Properties", icon: "bi-buildings" },
   { id: "appointments", label: "Appointments", icon: "bi-calendar2-week" },
   { id: "office-meets", label: "Office Meetings", icon: "bi-building" },
-  { id: "trips", label: "Tours", icon: "bi-car-front" },
+  { id: "trips", label: "Trips", icon: "bi-car-front" },
   { id: "calendar", label: "Calendar", icon: "bi-calendar3" },
   { id: "messages", label: "Messages", icon: "bi-chat-dots" },
   { id: "reviews", label: "Reviews", icon: "bi-star" },
@@ -31,7 +31,7 @@ export const ADMIN_ADD_USER_NAV_ITEMS = Object.freeze([
   { id: "properties", label: "Properties", icon: "bi-buildings" },
   { id: "appointments", label: "Appointments", icon: "bi-calendar2-week" },
   { id: "office-meets", label: "Office Meetings", icon: "bi-building" },
-  { id: "trips", label: "Tours", icon: "bi-car-front" },
+  { id: "trips", label: "Trips", icon: "bi-car-front" },
   { id: "calendar", label: "Calendar", icon: "bi-calendar3" },
   { id: "reviews", label: "Reviews", icon: "bi-star" },
   { id: "profile", label: "Profile", icon: "bi-person-circle" }
@@ -42,7 +42,7 @@ export const AGENT_NAV_ITEMS = Object.freeze([
   { id: "properties", label: "Properties", icon: "bi-house-door" },
   { id: "appointments", label: "Appointments", icon: "bi-calendar2-week" },
   { id: "meets", label: "Office Meetings", icon: "bi-building" },
-  { id: "trips", label: "Tours", icon: "bi-car-front" },
+  { id: "trips", label: "Trips", icon: "bi-car-front" },
   { id: "calendar", label: "Calendar", icon: "bi-calendar3" },
   { id: "messages", label: "Messages", icon: "bi-chat-dots" },
   { id: "reviews", label: "Reviews", icon: "bi-star" },
@@ -54,7 +54,7 @@ export const CUSTOMER_NAV_ITEMS = Object.freeze([
   { id: "browse", label: "Book Appointment", icon: "bi-house-add" },
   { id: "appointments", label: "My Appointments", icon: "bi-calendar2-check" },
   { id: "meets", label: "Office Meetings", icon: "bi-building" },
-  { id: "trips", label: "My Tours", icon: "bi-map" },
+  { id: "trips", label: "My Trips", icon: "bi-map" },
   { id: "calendar", label: "Calendar", icon: "bi-calendar3" },
   { id: "messages", label: "Messages", icon: "bi-chat-dots" },
   { id: "reviews", label: "Reviews", icon: "bi-star" },

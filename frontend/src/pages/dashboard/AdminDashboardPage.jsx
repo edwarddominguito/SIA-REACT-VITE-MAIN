@@ -68,6 +68,9 @@ export default function AdminDashboard() {
   const [userQuery, setUserQuery] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [userStatusFilter, setUserStatusFilter] = useState("all");
+  const [userPage, setUserPage] = useState(1);
+  const USERS_PER_PAGE = 5;
+  const [reassigningApptId, setReassigningApptId] = useState("");
   const [googleCalendarStatus, setGoogleCalendarStatus] = useState(null);
   const [isLoadingGoogleCalendarStatus, setIsLoadingGoogleCalendarStatus] = useState(false);
   const [isSyncingGoogleCalendar, setIsSyncingGoogleCalendar] = useState(false);
@@ -328,6 +331,12 @@ export default function AdminDashboard() {
         .includes(q);
     });
   }, [users, userQuery, userRoleFilter, userStatusFilter]);
+  const userTotalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+  const userPageClamped = Math.min(userPage, userTotalPages);
+  const paginatedUsers = useMemo(
+    () => filteredUsers.slice((userPageClamped - 1) * USERS_PER_PAGE, userPageClamped * USERS_PER_PAGE),
+    [filteredUsers, userPageClamped, USERS_PER_PAGE]
+  );
   const sortedReviews = useMemo(
     () => reviews.slice().sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")),
     [reviews]
@@ -622,13 +631,27 @@ export default function AdminDashboard() {
     }
   };
 
-  const currentTabLabel = tab === "appointments"
+  const currentTabLabel = tab === "dashboard"
+    ? "Overview"
+    : tab === "appointments"
     ? "Appointment Management"
     : tab === "users"
-      ? "User Management"
-      : tab === "properties"
-        ? "Property Management"
-        : ADMIN_NAV_ITEMS.find((item) => item.id === tab)?.label || "Command Center";
+    ? "User Management"
+    : tab === "properties"
+    ? "Property Listings"
+    : tab === "calendar"
+    ? "Operations Calendar"
+    : tab === "messages"
+    ? "Inbox"
+    : tab === "reviews"
+    ? "Client Feedback"
+    : tab === "office-meets"
+    ? "Office Meetings"
+    : tab === "trips"
+    ? "Trip Scheduler"
+    : tab === "profile"
+    ? "My Account"
+    : ADMIN_NAV_ITEMS.find((item) => item.id === tab)?.label || "Overview";
 
   const saveUsers = (next) => {
     saveArray("allUsers", next);
@@ -813,99 +836,79 @@ export default function AdminDashboard() {
 
         {tab === "dashboard" && (
           <>
-            <section className="agent-hero rowed admin-dashboard-hero">
-              <div>
-                <h1>Command Center</h1>
-                <p>Track team operations, appointment pipeline, and customer activity from a single admin workspace.</p>
-              </div>
-              <div className="admin-hero-pills">
-                <span><i className="bi bi-lightning-charge"></i> {openPipelineCount} active operations</span>
-                <span><i className="bi bi-person-check"></i> {availableAgents.length}/{agents.length} agents available</span>
-                <span><i className="bi bi-star"></i> {reviews.length ? avgReviewRating.toFixed(1) : "0.0"} avg review score</span>
+            <section className="dash-header">
+              <div className="dash-header-pills">
+                <span className="dash-pill"><i className="bi bi-lightning-charge"></i>{openPipelineCount} active</span>
+                <span className="dash-pill"><i className="bi bi-person-check"></i>{availableAgents.length}/{agents.length} agents</span>
+                <span className="dash-pill"><i className="bi bi-star"></i>{reviews.length ? avgReviewRating.toFixed(1) : "0.0"} rating</span>
               </div>
             </section>
 
-            <section className="agent-stats-grid admin-stats-grid">
-              <AdminStatCard
-                label="Total Users"
-                value={users.length}
-                icon="bi-people"
-                tone="blue"
-                helper={`${agents.length} agents, ${customers.length} customers`}
-                delta={`${availableAgents.length} available now`}
-              />
-              <AdminStatCard
-                label="Open Pipeline"
-                value={openPipelineCount}
-                icon="bi-speedometer2"
-                tone="amber"
-                helper={`${pendingApps.length} pending appointments`}
-                delta={`${pendingMeets.length} pending office meetings`}
-              />
-              <AdminStatCard
-                label="Completed Tours/Appointments"
-                value={doneAppointmentsCount}
-                icon="bi-check2-circle"
-                tone="green"
-                helper={`${assignedAppointmentsCount} appointments assigned`}
-                delta={`${trips.length} total trips`}
-              />
-              <AdminStatCard
-                label="Client Feedback"
-                value={reviews.length}
-                icon="bi-chat-heart"
-                tone="violet"
-                helper={`${pendingReviewCount} items need action`}
-                delta={`${lowRatingCount} low ratings`}
-              />
-            </section>
-
-            <section className="admin-dashboard-insights-grid">
-              <article className="agent-panel admin-analytics-card">
-                <div className="agent-panel-head">
-                  <h3>Monthly Activity</h3>
-                  <span className="badge badge-soft">Last 6 months</span>
+            <section className="dash-stats">
+              <div className="dash-stat">
+                <div className="dash-stat-icon blue"><i className="bi bi-people"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{users.length}</span>
+                  <span className="dash-stat-label">Users</span>
                 </div>
-                <AdminMiniBarChart data={monthlyActivityData} />
-                <div className="admin-distribution-grid">
-                  <div className="admin-distribution-row">
-                    <span>Pending</span>
-                    <strong>{appointmentDistribution.pending}</strong>
-                  </div>
-                  <div className="admin-distribution-row">
-                    <span>Confirmed</span>
-                    <strong>{appointmentDistribution.confirmed}</strong>
-                  </div>
-                  <div className="admin-distribution-row">
-                    <span>Rescheduled</span>
-                    <strong>{appointmentDistribution.rescheduled}</strong>
-                  </div>
-                  <div className="admin-distribution-row">
-                    <span>Completed</span>
-                    <strong>{appointmentDistribution.completed}</strong>
-                  </div>
+                <span className="dash-stat-sub">{agents.length} agents · {customers.length} customers</span>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon amber"><i className="bi bi-clock"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{openPipelineCount}</span>
+                  <span className="dash-stat-label">Pending</span>
+                </div>
+                <span className="dash-stat-sub">{pendingApps.length} appointments · {pendingMeets.length} meetings</span>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon green"><i className="bi bi-check2-circle"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{doneAppointmentsCount}</span>
+                  <span className="dash-stat-label">Completed</span>
+                </div>
+                <span className="dash-stat-sub">{assignedAppointmentsCount} assigned · {trips.length} trips</span>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon violet"><i className="bi bi-chat-heart"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{reviews.length}</span>
+                  <span className="dash-stat-label">Reviews</span>
+                </div>
+                <span className="dash-stat-sub">{lowRatingCount} low · {pendingReviewCount} need action</span>
+              </div>
+            </section>
+
+            <section className="dash-bottom-grid">
+              <article className="dash-card dash-pipeline">
+                <div className="dash-card-head">
+                  <h3>Pipeline Summary</h3>
+                </div>
+                <div className="dash-pipeline-rows">
+                  <div className="dash-pipeline-row"><span>Pending</span><strong>{appointmentDistribution.pending}</strong></div>
+                  <div className="dash-pipeline-row"><span>Confirmed</span><strong>{appointmentDistribution.confirmed}</strong></div>
+                  <div className="dash-pipeline-row"><span>Rescheduled</span><strong>{appointmentDistribution.rescheduled}</strong></div>
+                  <div className="dash-pipeline-row"><span>Completed</span><strong>{appointmentDistribution.completed}</strong></div>
                 </div>
               </article>
 
-              <article className="agent-panel admin-activity-card">
-                <div className="agent-panel-head">
-                  <h3>Recent Activity Feed</h3>
+              <article className="dash-card dash-activity">
+                <div className="dash-card-head">
+                  <h3>Recent Activity</h3>
                   <span className="badge badge-soft">{recentActivity.length}</span>
                 </div>
-                <div className="admin-activity-list">
-                  {recentActivity.map((item) => (
-                    <article key={item.id} className="admin-activity-item">
-                      <span className="admin-activity-icon"><i className={`bi ${item.icon}`}></i></span>
-                      <div className="admin-activity-body">
-                        <div className="admin-activity-top">
-                          <strong>{item.title}</strong>
-                          <span className={statusBadgeClass(item.status, item.type === "Office Meeting" ? "office_meeting" : item.type === "Tour" ? "tour" : "appointment")}>
-                            {formatWorkflowStatus(item.status, item.type === "Office Meeting" ? "office_meeting" : item.type === "Tour" ? "tour" : "appointment")}
-                          </span>
-                        </div>
-                        <p>{item.type} • {item.subtitle}</p>
+                <div className="dash-activity-list">
+                  {recentActivity.slice(0, 5).map((item) => (
+                    <div key={item.id} className="dash-activity-row">
+                      <i className={`bi ${item.icon} dash-activity-icon`}></i>
+                      <div className="dash-activity-body">
+                        <strong>{item.title}</strong>
+                        <span className="dash-activity-meta">{item.type} · {item.subtitle}</span>
                       </div>
-                    </article>
+                      <span className={statusBadgeClass(item.status, item.type === "Office Meeting" ? "office_meeting" : item.type === "Tour" ? "tour" : "appointment")}>
+                        {formatWorkflowStatus(item.status, item.type === "Office Meeting" ? "office_meeting" : item.type === "Tour" ? "tour" : "appointment")}
+                      </span>
+                    </div>
                   ))}
                   {!recentActivity.length && (
                     <div className="agent-empty">
@@ -913,59 +916,6 @@ export default function AdminDashboard() {
                       <p>No recent activity yet.</p>
                     </div>
                   )}
-                </div>
-              </article>
-            </section>
-
-            <section className="agent-split-grid admin-dashboard-tables">
-              <article className="agent-panel">
-                <div className="agent-panel-head">
-                  <h3>Latest Appointments</h3>
-                  <span className="badge badge-soft">{apps.length}</span>
-                </div>
-                <div className="table-responsive">
-                  <table className="table align-middle admin-modern-table">
-                    <thead><tr><th>Property</th><th>Customer</th><th>Property Agent</th><th>Assigned Agent</th><th>Date/Time</th><th>Status</th></tr></thead>
-                    <tbody>
-                      {sortedAppointments.slice(0, 8).map((a) => (
-                        <tr key={a.id}>
-                          <td>{a.propertyTitle}</td>
-                          <td>{formatCustomerIdentity(a.customer)}</td>
-                          <td>{formatAgentIdentity(a.agent)}</td>
-                          <td>{a.assignedAgent ? formatAgentIdentity(a.assignedAgent) : <span className="small muted">Unassigned</span>}</td>
-                          <td>{formatDateTimeLabel(a.date, a.time)}</td>
-                          <td><span className={statusBadgeClass(a.status, "appointment")}>{formatWorkflowStatus(a.status, "appointment")}</span></td>
-                        </tr>
-                      ))}
-                      {!apps.length && <tr><td colSpan="6" className="text-muted">No appointments yet.</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-
-              <article className="agent-panel">
-                <div className="agent-panel-head">
-                  <h3>Office Meeting Requests</h3>
-                  <span className="badge badge-soft">{meets.length}</span>
-                </div>
-                <div className="table-responsive">
-                  <table className="table align-middle admin-modern-table">
-                    <thead><tr><th>Requester</th><th>Date/Time</th><th>Mode</th><th>Status</th></tr></thead>
-                    <tbody>
-                      {meets.slice().reverse().slice(0, 8).map((m) => (
-                        <tr key={m.id}>
-                          <td>
-                            <div className="fw-bold">{m.fullName || m.customer || m.requestedBy || "-"}</div>
-                            <div className="small muted">@{m.customer || m.requestedBy || "-"}</div>
-                          </td>
-                          <td>{formatDateTimeLabel(m.date, m.time)}</td>
-                          <td>{m.mode === "virtual" ? "Virtual" : "In Office"}</td>
-                          <td><span className={statusBadgeClass(m.status, "office_meeting")}>{formatWorkflowStatus(m.status, "office_meeting")}</span></td>
-                        </tr>
-                      ))}
-                      {!meets.length && <tr><td colSpan="4" className="text-muted">No office meeting requests yet.</td></tr>}
-                    </tbody>
-                  </table>
                 </div>
               </article>
             </section>
@@ -978,7 +928,7 @@ export default function AdminDashboard() {
               <div className="agent-panel-head">
                 <div>
                   <h3>Google Calendar Sync</h3>
-                  <p className="muted mb-0">Use this before your defense to push the latest appointments, meetings, and tours into your demo calendar.</p>
+                  <p className="muted mb-0">Use this before your defense to push the latest appointments, meetings, and trips into your demo calendar.</p>
                 </div>
                 <span className={`badge ${googleCalendarStatus?.config?.enabled ? "badge-soft" : "bg-secondary-subtle text-secondary"}`}>
                   {googleCalendarStatus?.config?.enabled ? "Enabled" : "Disabled"}
@@ -1046,7 +996,7 @@ export default function AdminDashboard() {
 
             <DashboardCalendar
               title="Operations Calendar"
-              subtitle="Appointments, office meetings, and tours in one monthly view."
+              subtitle="Appointments, office meetings, and trips in one monthly view."
               events={adminCalendarEvents}
               storageKey="dashboard-calendar-cursor:admin"
             />
@@ -1067,16 +1017,16 @@ export default function AdminDashboard() {
                     className="form-control"
                     placeholder="Search full name, email, username..."
                     value={userQuery}
-                    onChange={(e) => setUserQuery(e.target.value)}
+                    onChange={(e) => { setUserQuery(e.target.value); setUserPage(1); }}
                   />
                 </div>
-                <select className="form-select" value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value)}>
+                <select className="form-select" value={userRoleFilter} onChange={(e) => { setUserRoleFilter(e.target.value); setUserPage(1); }}>
                   <option value="all">All Roles</option>
                   <option value="admin">Admin</option>
                   <option value="agent">Agent</option>
                   <option value="customer">Customer</option>
                 </select>
-                <select className="form-select" value={userStatusFilter} onChange={(e) => setUserStatusFilter(e.target.value)}>
+                <select className="form-select" value={userStatusFilter} onChange={(e) => { setUserStatusFilter(e.target.value); setUserPage(1); }}>
                   <option value="all">All Status</option>
                   <option value="active">Active</option>
                   <option value="busy">Busy</option>
@@ -1189,14 +1139,14 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((u) => {
+                  {paginatedUsers.map((u) => {
                     const status = getUserStatus(u);
                     const isInactive = status === "inactive";
                     return (
                       <tr key={u.id}>
                         <td>
                           <div className="admin-user-name-cell">
-                            <span className="admin-user-avatar">{userInitials(u)}</span>
+                            <span className={`admin-user-avatar avatar-role-${u.role || "customer"}`}>{userInitials(u)}</span>
                             <div className="admin-user-identity">
                               <strong>{u.fullName || u.username}</strong>
                               <span>{u.username}</span>
@@ -1266,13 +1216,49 @@ export default function AdminDashboard() {
                     );
                   })}
                   {!filteredUsers.length && (
-                    <tr><td colSpan="8" className="text-muted">No users found for current filters.</td></tr>
+                    <tr><td colSpan="8" className="text-center text-muted py-4">No users found for current filters.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
             <div className="admin-users-footer">
-              <span>Showing {filteredUsers.length} of {users.length} users</span>
+              <span>
+                Showing {filteredUsers.length === 0 ? 0 : (userPageClamped - 1) * USERS_PER_PAGE + 1}–{Math.min(userPageClamped * USERS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length} {filteredUsers.length !== users.length ? `filtered (${users.length} total)` : "users"}
+              </span>
+              {userTotalPages > 1 && (
+                <div className="admin-users-pagination">
+                  <button
+                    type="button"
+                    className="admin-page-btn"
+                    onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                    disabled={userPageClamped <= 1}
+                    aria-label="Previous page"
+                  >
+                    <i className="bi bi-chevron-left"></i>
+                  </button>
+                  {Array.from({ length: userTotalPages }, (_, i) => i + 1).map((pg) => (
+                    <button
+                      key={pg}
+                      type="button"
+                      className={`admin-page-btn${pg === userPageClamped ? " active" : ""}`}
+                      onClick={() => setUserPage(pg)}
+                      aria-label={`Page ${pg}`}
+                      aria-current={pg === userPageClamped ? "page" : undefined}
+                    >
+                      {pg}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="admin-page-btn"
+                    onClick={() => setUserPage((p) => Math.min(userTotalPages, p + 1))}
+                    disabled={userPageClamped >= userTotalPages}
+                    aria-label="Next page"
+                  >
+                    <i className="bi bi-chevron-right"></i>
+                  </button>
+                </div>
+              )}
               <span>Admins: {users.filter((u) => u.role === "admin").length} | Agents: {agents.length} | Customers: {customers.length}</span>
             </div>
           </section>
@@ -1341,7 +1327,7 @@ export default function AdminDashboard() {
         )}
 
         {tab === "appointments" && (
-          <section className="agent-panel">
+          <section className="agent-panel section-appointments">
             <div className="agent-panel-head"><h3>All Appointments</h3><span className="badge badge-soft">{filteredAppointments.length}</span></div>
             <div className="appointments-toolbar">
               <div className="input-group">
@@ -1384,62 +1370,101 @@ export default function AdminDashboard() {
             </div>
             <div className="table-responsive">
               <table className="table align-middle admin-modern-table">
-                <thead><tr><th>Property</th><th>Customer</th><th>Property Agent</th><th>Assigned Agent</th><th>Date/Time</th><th>Status</th><th>Assign</th></tr></thead>
+                <thead><tr><th>Property</th><th>Customer</th><th>Assigned Agent</th><th>Date / Time</th><th>Status</th><th>Assignment</th></tr></thead>
                 <tbody>
                   {filteredAppointments.map((a) => {
                     const canAssign = canAssignAppointment(a);
                     const assignableAgents = getAssignableAgentsForAppointment(a);
+                    const isReassigning = reassigningApptId === a.id;
+                    const isAutoAssigned = Boolean(a.assignedAgent);
                     return (
                     <tr key={a.id}>
                       <td>
-                        <div className="appointment-property-cell">
+                        <div className="appointment-property-cell appt-property-compact">
                           <img
-                            className="appointment-property-thumb"
+                            className="appointment-property-thumb appt-thumb-sm"
                             src={getPropertyImage(a)}
                             alt={a.propertyTitle || "Property"}
                             onError={(e) => handlePropertyImageError(e, { id: a.propertyId, title: a.propertyTitle, location: a.location })}
                           />
                           <div>
-                            <div className="fw-bold">{a.propertyTitle}</div>
-                            <div className="small muted">{a.location}</div>
+                            <div className="fw-semibold appt-prop-title">{a.propertyTitle}</div>
+                            <div className="appt-prop-loc">{a.location}</div>
                           </div>
                         </div>
                       </td>
-                      <td>{formatCustomerIdentity(a.customer)}</td>
-                      <td>{formatAgentIdentity(a.agent)}</td>
-                      <td>{a.assignedAgent ? formatAgentIdentity(a.assignedAgent) : <span className="small muted">Unassigned</span>}</td>
-                      <td>{formatDateTimeLabel(a.date, a.time)}</td>
+                      <td className="appt-customer-cell">{formatCustomerIdentity(a.customer)}</td>
+                      <td>{a.assignedAgent ? formatAgentIdentity(a.assignedAgent) : <span className="small muted">—</span>}</td>
+                      <td className="appt-datetime-cell">{formatDateTimeLabel(a.date, a.time)}</td>
                       <td><span className={statusBadgeClass(a.status, "appointment")}>{formatWorkflowStatus(a.status, "appointment")}</span></td>
                       <td>
                         {canAssign ? (
-                          <div className="d-flex align-items-center gap-2">
-                            <select
-                              className="form-select form-select-sm"
-                              value={a.assignedAgent || ""}
-                              onChange={(e) => assignAppointmentAgent(a.id, e.target.value)}
-                            >
-                              <option value="">Unassigned</option>
-                              {assignableAgents.map((agent) => (
-                                <option key={agent.id} value={agent.username}>
-                                  {formatAgentIdentity(agent.username)}
-                                </option>
-                              ))}
-                              {!!a.assignedAgent &&
-                                !availableAgents.some((agent) => agent.username === a.assignedAgent) && (
-                                  <option value={a.assignedAgent}>
-                                    {formatAgentIdentity(a.assignedAgent)} (currently unavailable)
+                          isReassigning ? (
+                            <div className="appt-assign-inline">
+                              <select
+                                className="form-select form-select-sm"
+                                defaultValue={a.assignedAgent || ""}
+                                autoFocus
+                                onChange={(e) => {
+                                  assignAppointmentAgent(a.id, e.target.value);
+                                  setReassigningApptId("");
+                                }}
+                              >
+                                <option value="">Unassign</option>
+                                {assignableAgents.map((agent) => (
+                                  <option key={agent.id} value={agent.username}>
+                                    {formatAgentIdentity(agent.username)}
                                   </option>
-                                )}
-                            </select>
-                          </div>
+                                ))}
+                                {!!a.assignedAgent &&
+                                  !availableAgents.some((agent) => agent.username === a.assignedAgent) && (
+                                    <option value={a.assignedAgent}>
+                                      {formatAgentIdentity(a.assignedAgent)} (unavailable)
+                                    </option>
+                                  )}
+                              </select>
+                              <button
+                                type="button"
+                                className="btn btn-link btn-sm appt-assign-cancel"
+                                onClick={() => setReassigningApptId("")}
+                                aria-label="Cancel reassignment"
+                              >
+                                <i className="bi bi-x"></i>
+                              </button>
+                            </div>
+                          ) : isAutoAssigned ? (
+                            <div className="appt-assigned-cell">
+                              <span className="appt-assigned-badge">
+                                <i className="bi bi-person-check-fill"></i>
+                                {formatAgentIdentity(a.assignedAgent)}
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-link btn-sm appt-reassign-btn"
+                                onClick={() => setReassigningApptId(a.id)}
+                                title="Reassign agent"
+                                aria-label="Reassign agent"
+                              >
+                                <i className="bi bi-arrow-repeat"></i>
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-sm appt-assign-btn"
+                              onClick={() => setReassigningApptId(a.id)}
+                            >
+                              <i className="bi bi-person-plus"></i> Assign Agent
+                            </button>
+                          )
                         ) : (
-                          <span className="small muted">Finished</span>
+                          <span className="appt-finished-label"><i className="bi bi-check2-circle"></i> Finished</span>
                         )}
                       </td>
                     </tr>
                     );
                   })}
-                  {!filteredAppointments.length && <tr><td colSpan="7" className="text-muted">No appointments found for the current filters.</td></tr>}
+                  {!filteredAppointments.length && <tr><td colSpan="6" className="text-center text-muted py-4">No appointments found for the current filters.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -1449,23 +1474,35 @@ export default function AdminDashboard() {
 
         {tab === "reviews" && (
           <>
-            <section className="agent-stats-grid reviews-stats-grid">
-              <article className="agent-stat-card">
-                <div className="agent-stat-top"><span>Total Reviews</span><i className="bi bi-chat-left-text"></i></div>
-                <strong>{reviews.length}</strong>
-              </article>
-              <article className="agent-stat-card">
-                <div className="agent-stat-top"><span>Average Rating</span><i className="bi bi-star-fill"></i></div>
-                <strong>{reviews.length ? `${avgReviewRating.toFixed(1)}/5` : "-"}</strong>
-              </article>
-              <article className="agent-stat-card">
-                <div className="agent-stat-top"><span>Needs Action</span><i className="bi bi-exclamation-circle"></i></div>
-                <strong>{pendingReviewCount}</strong>
-              </article>
-              <article className="agent-stat-card">
-                <div className="agent-stat-top"><span>Low Ratings</span><i className="bi bi-emoji-frown"></i></div>
-                <strong>{lowRatingCount}</strong>
-              </article>
+            <section className="dash-stats">
+              <div className="dash-stat">
+                <div className="dash-stat-icon blue"><i className="bi bi-chat-left-text"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{reviews.length}</span>
+                  <span className="dash-stat-label">Reviews</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon amber"><i className="bi bi-star-fill"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{reviews.length ? `${avgReviewRating.toFixed(1)}/5` : "-"}</span>
+                  <span className="dash-stat-label">Avg Rating</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon green"><i className="bi bi-exclamation-circle"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{pendingReviewCount}</span>
+                  <span className="dash-stat-label">Needs Action</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <div className="dash-stat-icon violet"><i className="bi bi-emoji-frown"></i></div>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-value">{lowRatingCount}</span>
+                  <span className="dash-stat-label">Low Ratings</span>
+                </div>
+              </div>
             </section>
 
             <section className="agent-panel">
@@ -1582,13 +1619,13 @@ export default function AdminDashboard() {
           <section className="agent-panel">
             <div className="trip-page-head">
               <div>
-                <h3>All Tours</h3>
-                <p>Monitor all scheduled property tours.</p>
+                <h3>All Trips</h3>
+                <p>Monitor all scheduled property trips.</p>
               </div>
               <span className="badge badge-soft">{trips.length}</span>
             </div>
 
-            <div className="trip-section-title">Upcoming Tours</div>
+            <div className="trip-section-title">Upcoming Trips</div>
             <div className="trip-list-stack">
               {upcomingAdminTrips.slice().reverse().map((t) => {
                 const status = tripStatus(t);
@@ -1624,10 +1661,10 @@ export default function AdminDashboard() {
                   </article>
                 );
               })}
-              {!upcomingAdminTrips.length && <div className="agent-empty"><i className="bi bi-car-front"></i><p>No upcoming tours.</p></div>}
+              {!upcomingAdminTrips.length && <div className="agent-empty"><i className="bi bi-car-front"></i><p>No upcoming trips.</p></div>}
             </div>
 
-            <div className="trip-section-title mt-3">Past Tours</div>
+            <div className="trip-section-title mt-3">Past Trips</div>
             <div className="trip-list-stack">
               {pastAdminTrips.slice().reverse().map((t) => {
                 const status = tripStatus(t);
@@ -1646,11 +1683,11 @@ export default function AdminDashboard() {
               {!trips.length ? (
                 <div className="agent-empty large trip-empty-clean">
                   <i className="bi bi-car-front"></i>
-                  <h4>No tours available</h4>
-                  <p>Tours scheduled by agents will appear here.</p>
+                  <h4>No trips available</h4>
+                  <p>Trips scheduled by agents will appear here.</p>
                 </div>
               ) : !pastAdminTrips.length ? (
-                <div className="agent-empty"><i className="bi bi-clock-history"></i><p>No past tours yet.</p></div>
+                <div className="agent-empty"><i className="bi bi-clock-history"></i><p>No past trips yet.</p></div>
               ) : null}
             </div>
           </section>
